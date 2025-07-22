@@ -35,14 +35,16 @@ Before getting started, ensure you have:
 ### Opening the Project in a Dev Container
 
 1. **Clone the repository**:
+
    ```bash
-   git clone https://github.com/gloveboxes/ai-tour-26-zava-diy-dataset-plus-mcp.git
+   git clone https://github.com/microsoft/ai-tour-26-zava-diy-dataset-plus-mcp.git
    cd ai-tour-26-zava-diy-dataset-plus-mcp
    ```
 
    > **Note**: If you plan to use the data generation tools, uncomment `# -r data/requirements.txt` in the `requirements-dev.txt` file in the root folder of the repo before opening the dev container. This adds additional libraries required for data generation but will increase the dev container setup time.
 
 2. **Open in VS Code**:
+
    ```bash
    code .
    ```
@@ -57,6 +59,7 @@ Before getting started, ensure you have:
    - This includes PostgreSQL with pgvector extension, Python environment, and all required packages
 
 The dev container provides a complete development environment with:
+
 - PostgreSQL database with pgvector extension
 - Python 3.x with all required packages
 - Azure CLI for cloud deployments
@@ -72,6 +75,7 @@ cd infra && ./deploy.sh
 ```
 
 The deployment script will:
+
 - Create an Azure AI Foundry workspace
 - Deploy both **gpt-4o-mini** and **text-embedding-3-small** models
 - Configure environment variables in `src/python/workshop/.env`
@@ -85,16 +89,18 @@ az login --use-device-code
 ```
 
 This will display output similar to:
+
 ```
 To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code JGNL9Q4HW to authenticate.
 ```
 
 Follow these steps:
+
 1. Copy the device code (e.g., `JGNL9Q4HW`)
-1. Open a web browser and navigate to https://microsoft.com/devicelogin
-2. Paste the device code (e.g., `JGNL9Q4HW`)
-3. Complete the authentication process in your browser
-4. Return to your terminal to confirm successful authentication
+1. Open a web browser and navigate to <https://microsoft.com/devicelogin>
+1. Paste the device code (e.g., `JGNL9Q4HW`)
+1. Complete the authentication process in your browser
+1. Return to your terminal to confirm successful authentication
 
 Once authenticated, you can proceed use the Azure AI models in your applications and MCP servers.
 
@@ -109,7 +115,9 @@ This project includes three specialized Model Context Protocol servers designed 
 The Customer Sales collection provides two specialized servers with different capabilities:
 
 #### Basic Customer Sales Server (`customer_sales.py`)
+
 **Key Features**:
+
 - Product search by name with fuzzy matching
 - Store-specific product availability through Row Level Security
 - Real-time inventory levels and stock information
@@ -117,7 +125,9 @@ The Customer Sales collection provides two specialized servers with different ca
 - Optimized for simple product lookups
 
 #### Semantic Search Customer Sales Server (`customer_sales_semantic_search.py`)
+
 **Key Features**:
+
 - AI-powered semantic product search using Azure OpenAI
 - Natural language product discovery with text-embedding-3-small
 - Vector similarity matching with pgvector
@@ -126,6 +136,7 @@ The Customer Sales collection provides two specialized servers with different ca
 - Relevance scoring for intelligent product matching
 
 **Use Cases**:
+
 - Customer service applications helping customers find products
 - Store associate tools for inventory lookup
 - E-commerce product search and recommendations
@@ -139,6 +150,7 @@ The Customer Sales collection provides two specialized servers with different ca
 **Purpose**: Comprehensive sales database access and analytics
 
 **Key Features**:
+
 - Multi-table schema access for complete database insights
 - Secure PostgreSQL query execution with Row Level Security
 - Access to customers, orders, inventory, and product data
@@ -146,6 +158,7 @@ The Customer Sales collection provides two specialized servers with different ca
 - Store manager access control and data isolation
 
 **Use Cases**:
+
 - Sales performance analysis and reporting
 - Business intelligence and data analytics
 - Store manager dashboards and insights
@@ -157,6 +170,7 @@ The Customer Sales collection provides two specialized servers with different ca
 ### Security Model
 
 All three servers implement **Row Level Security (RLS)** ensuring:
+
 - **Store managers** only access their store's data
 - **Customer service reps** see store-specific product availability
 - **Data isolation** between different store locations
@@ -168,14 +182,14 @@ The Zava DIY PostgreSQL database provides a comprehensive retail ecosystem with 
 
 ### 📊 Dataset Scale
 
-| Component | Count | Description |
-|-----------|-------|-------------|
-| **Customers** | 50,000+ | Realistic demographic profiles across Washington State |
-| **Products** | 400+ | Complete DIY home improvement catalog |
-| **Stores** | 8 | Physical + online locations across Washington State |
-| **Order Items** | 200,000+ | Detailed line items with pricing and quantities |
-| **Inventory Records** | 3,000+ | Store-specific stock levels |
-| **Vector Embeddings** | 400+ | AI-powered product similarity search |
+| Component             | Count    | Description                                            |
+| --------------------- | -------- | ------------------------------------------------------ |
+| **Customers**         | 50,000+  | Realistic demographic profiles across Washington State |
+| **Products**          | 400+     | Complete DIY home improvement catalog                  |
+| **Stores**            | 8        | Physical + online locations across Washington State    |
+| **Order Items**       | 200,000+ | Detailed line items with pricing and quantities        |
+| **Inventory Records** | 3,000+   | Store-specific stock levels                            |
+| **Vector Embeddings** | 400+     | AI-powered product similarity search                   |
 
 ### 🏪 Store Locations
 
@@ -209,6 +223,7 @@ The dataset includes the following product categories with all available product
 ### 🌡️ Seasonal Patterns
 
 The dataset includes realistic seasonal variations:
+
 - **Spring Surge**: Paint and garden products peak in March-May
 - **Summer Construction**: Power tools and lumber peak in June-August
 - **Fall Preparation**: Hardware and storage products increase
