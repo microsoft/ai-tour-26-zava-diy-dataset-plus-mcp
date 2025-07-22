@@ -24,3 +24,4 @@ src/workshop/[.][v]env/
 DevTunnels/devtunnels-tokens-microsoft
 DevTunnels/devtunnels.json
 manuals/
+.claude/
