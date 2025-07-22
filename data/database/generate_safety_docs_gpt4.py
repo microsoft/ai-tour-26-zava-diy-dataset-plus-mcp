@@ -24,11 +24,24 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from rich.logging import RichHandler
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.panel import Panel
+from rich.text import Text
 
 # Load environment variables from .env file
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Setup rich console and logging
+console = Console()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console, rich_tracebacks=True)]
+)
+logger = logging.getLogger("safety_docs_generator")
 
 # GitHub Models API Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
@@ -216,7 +229,7 @@ async def call_github_models_api(prompt: str, max_tokens: int = 1000) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        logging.error(f"Error calling GitHub Models API: {e}")
+        logger.error(f"Error calling GitHub Models API: {e}")
         return "Error generating content - using fallback"
 
 async def generate_sds_content_gpt4(product: Dict, category: str) -> Dict[str, str]:
@@ -622,92 +635,120 @@ async def generate_safety_documents(conn: asyncpg.Connection, max_products: Opti
             ORDER BY p.product_id
         """)
     
-    logging.info(f"Generating safety documents for {len(products)} products using GPT-4.1...")
+    console.print(Panel.fit(
+        f"[bold blue]🔬 Safety Document Generation[/bold blue]\n"
+        f"Generating safety documents for [bold]{len(products)}[/bold] products using GPT-4.1",
+        border_style="blue"
+    ))
     
     pdf_count = 0
     created_files = []
     
-    for product in products:
-        product_dict = dict(product)
-        sku = product['sku'].replace('/', '_').replace(' ', '_')  # Sanitize SKU for filename
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
         
-        logging.info(f"Processing {product['name']} ({product['sku']})...")
+        task = progress.add_task("Processing products...", total=len(products))
         
-        try:
-            # Generate SDS with GPT-4.1
-            sds_content = await generate_sds_content_gpt4(product_dict, product['category'])
-            sds_document = SDS_TEMPLATE.format(
-                product_name=product['name'],
-                sku=product['sku'],
-                revision_date=(datetime.now() - timedelta(days=random.randint(30, 730))).strftime('%Y-%m-%d'),
-                sds_number=f"{random.randint(1000, 9999)}",
-                version="1.0",
-                **sds_content
-            )
+        for product in products:
+            product_dict = dict(product)
+            sku = product['sku'].replace('/', '_').replace(' ', '_')  # Sanitize SKU for filename
             
-            # Create SDS PDF
-            sds_filename = f"{sku}_SDS_GPT4.pdf"
-            sds_path = create_pdf_document(sds_document, sds_filename, "/workspace/manuals")
-            created_files.append(sds_path)
-            pdf_count += 1
+            progress.update(task, description=f"Processing [bold]{product['name']}[/bold] ({product['sku']})")
             
-            # Generate compliance certificate with GPT-4.1
-            compliance_content = await generate_compliance_content_gpt4(product_dict, product['category'])
-            compliance_document = COMPLIANCE_TEMPLATE.format(
-                product_name=product['name'],
-                sku=product['sku'],
-                cert_number=f"{random.randint(10000, 99999)}",
-                issue_date=(datetime.now() - timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
-                expiry_date=(datetime.now() + timedelta(days=730)).strftime('%Y-%m-%d'),
-                manufacturing_date=(datetime.now() - timedelta(days=random.randint(30, 180))).strftime('%Y-%m-%d'),
-                batch_number=f"LOT-{random.randint(100000, 999999)}",
-                **compliance_content
-            )
-            
-            # Create Compliance PDF
-            compliance_filename = f"{sku}_COMPLIANCE_GPT4.pdf"
-            compliance_path = create_pdf_document(compliance_document, compliance_filename, "/workspace/manuals")
-            created_files.append(compliance_path)
-            pdf_count += 1
-            
-            # Generate Zava-specific installation quirks document with GPT-4.1
-            if random.random() < 0.4:  # 40% of products get quirks document
-                quirks_document = await generate_zava_quirks_document_gpt4(product_dict, product['category'])
-                quirks_filename = f"{sku}_QUIRKS_GPT4.pdf"
-                quirks_path = create_pdf_document(quirks_document, quirks_filename, "/workspace/manuals")
-                created_files.append(quirks_path)
-                pdf_count += 1
-            
-            # Generate environmental impact statement with GPT-4.1 for some products
-            if random.random() < 0.3:  # 30% get environmental statements
-                env_document = await generate_environmental_statement_gpt4(product_dict, product['category'])
-                env_filename = f"{sku}_ENVIRONMENTAL_GPT4.pdf"
-                env_path = create_pdf_document(env_document, env_filename, "/workspace/manuals")
-                created_files.append(env_path)
+            try:
+                # Generate SDS with GPT-4.1
+                sds_content = await generate_sds_content_gpt4(product_dict, product['category'])
+                sds_document = SDS_TEMPLATE.format(
+                    product_name=product['name'],
+                    sku=product['sku'],
+                    revision_date=(datetime.now() - timedelta(days=random.randint(30, 730))).strftime('%Y-%m-%d'),
+                    sds_number=f"{random.randint(1000, 9999)}",
+                    version="1.0",
+                    **sds_content
+                )
+                
+                # Create SDS PDF
+                sds_filename = f"{sku}_SDS_GPT4.pdf"
+                sds_path = create_pdf_document(sds_document, sds_filename, "/workspace/manuals")
+                created_files.append(sds_path)
                 pdf_count += 1
                 
-        except Exception as e:
-            logging.error(f"Error processing {product['name']}: {e}")
-            continue
-        
-        # Small delay to avoid overwhelming the API
-        await asyncio.sleep(0.5)
+                # Generate compliance certificate with GPT-4.1
+                compliance_content = await generate_compliance_content_gpt4(product_dict, product['category'])
+                compliance_document = COMPLIANCE_TEMPLATE.format(
+                    product_name=product['name'],
+                    sku=product['sku'],
+                    cert_number=f"{random.randint(10000, 99999)}",
+                    issue_date=(datetime.now() - timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
+                    expiry_date=(datetime.now() + timedelta(days=730)).strftime('%Y-%m-%d'),
+                    manufacturing_date=(datetime.now() - timedelta(days=random.randint(30, 180))).strftime('%Y-%m-%d'),
+                    batch_number=f"LOT-{random.randint(100000, 999999)}",
+                    **compliance_content
+                )
+                
+                # Create Compliance PDF
+                compliance_filename = f"{sku}_COMPLIANCE_GPT4.pdf"
+                compliance_path = create_pdf_document(compliance_document, compliance_filename, "/workspace/manuals")
+                created_files.append(compliance_path)
+                pdf_count += 1
+                
+                # Generate Zava-specific installation quirks document with GPT-4.1
+                if random.random() < 0.4:  # 40% of products get quirks document
+                    quirks_document = await generate_zava_quirks_document_gpt4(product_dict, product['category'])
+                    quirks_filename = f"{sku}_QUIRKS_GPT4.pdf"
+                    quirks_path = create_pdf_document(quirks_document, quirks_filename, "/workspace/manuals")
+                    created_files.append(quirks_path)
+                    pdf_count += 1
+                
+                # Generate environmental impact statement with GPT-4.1 for some products
+                if random.random() < 0.3:  # 30% get environmental statements
+                    env_document = await generate_environmental_statement_gpt4(product_dict, product['category'])
+                    env_filename = f"{sku}_ENVIRONMENTAL_GPT4.pdf"
+                    env_path = create_pdf_document(env_document, env_filename, "/workspace/manuals")
+                    created_files.append(env_path)
+                    pdf_count += 1
+                    
+            except Exception as e:
+                logger.error(f"Error processing [bold]{product['name']}[/bold]: {e}")
+                continue
+            
+            progress.advance(task)
+            # Small delay to avoid overwhelming the API
+            await asyncio.sleep(0.5)
     
-    logging.info(f"Safety document generation complete! Created {pdf_count} PDF files using GPT-4.1.")
-    logging.info(f"Files saved in: /workspace/manuals/ directory")
+    # Final summary
+    console.print(Panel.fit(
+        f"[bold green]✅ Generation Complete![/bold green]\n"
+        f"Created [bold]{pdf_count}[/bold] PDF files using GPT-4.1\n"
+        f"Files saved in: [bold]/workspace/manuals/[/bold] directory",
+        border_style="green"
+    ))
     
     # Show some sample filenames
     if created_files:
-        logging.info("Sample files created:")
+        console.print("\n[bold]📁 Sample files created:[/bold]")
         for file_path in created_files[:10]:  # Show first 10 files
-            logging.info(f"  {Path(file_path).name}")
+            console.print(f"  • {Path(file_path).name}")
         if len(created_files) > 10:
-            logging.info(f"  ... and {len(created_files) - 10} more files")
+            console.print(f"  ... and [bold]{len(created_files) - 10}[/bold] more files")
 
 async def main() -> None:
     """Main function to generate safety documents as PDFs using GPT-4.1"""
     try:
+        # Display startup banner
+        console.print(Panel.fit(
+            "[bold blue]🏗️ Zava Safety Document Generator[/bold blue]\n"
+            "[dim]GPT-4.1 Enhanced Version[/dim]",
+            border_style="blue"
+        ))
+        
         if not GITHUB_TOKEN:
+            console.print("[bold red]❌ Error:[/bold red] GITHUB_TOKEN environment variable must be set to use GitHub Models API")
             raise ValueError("GITHUB_TOKEN environment variable must be set to use GitHub Models API")
             
         POSTGRES_CONFIG = {
@@ -718,8 +759,9 @@ async def main() -> None:
             'database': 'zava'
         }
         
-        conn = await asyncpg.connect(**POSTGRES_CONFIG)
-        logging.info("Connected to PostgreSQL for safety document generation")
+        with console.status("[bold blue]Connecting to PostgreSQL...") as status:
+            conn = await asyncpg.connect(**POSTGRES_CONFIG)
+        console.print("✅ [bold green]Connected to PostgreSQL[/bold green] for safety document generation")
         
         # Generate for a limited number of products initially (to test API limits)
         await generate_safety_documents(conn, max_products=5)  # Start with 5 products
@@ -728,7 +770,6 @@ async def main() -> None:
         manuals_path = Path("/workspace/manuals")
         if manuals_path.exists():
             pdf_files = list(manuals_path.glob("*GPT4*.pdf"))
-            logging.info(f"Total GPT-4.1 generated PDF files created: {len(pdf_files)}")
             
             # Group by document type
             sds_files = [f for f in pdf_files if "_SDS_GPT4.pdf" in f.name]
@@ -736,16 +777,23 @@ async def main() -> None:
             quirks_files = [f for f in pdf_files if "_QUIRKS_GPT4.pdf" in f.name]
             env_files = [f for f in pdf_files if "_ENVIRONMENTAL_GPT4.pdf" in f.name]
             
-            logging.info("GPT-4.1 generated document type breakdown:")
-            logging.info(f"  Safety Data Sheets: {len(sds_files)} files")
-            logging.info(f"  Compliance Certificates: {len(compliance_files)} files")
-            logging.info(f"  Installation Quirks: {len(quirks_files)} files")
-            logging.info(f"  Environmental Statements: {len(env_files)} files")
+            console.print(Panel(
+                f"[bold]📊 Document Type Breakdown:[/bold]\n\n"
+                f"🧪 Safety Data Sheets: [bold]{len(sds_files)}[/bold] files\n"
+                f"📋 Compliance Certificates: [bold]{len(compliance_files)}[/bold] files\n"
+                f"🔧 Installation Quirks: [bold]{len(quirks_files)}[/bold] files\n"
+                f"🌱 Environmental Statements: [bold]{len(env_files)}[/bold] files\n\n"
+                f"[bold]Total: {len(pdf_files)} GPT-4.1 generated files[/bold]",
+                title="📁 Results Summary",
+                border_style="cyan"
+            ))
         
         await conn.close()
+        console.print("✅ [bold green]Database connection closed[/bold green]")
         
     except Exception as e:
-        logging.error(f"Error in safety document generation: {e}")
+        logger.error(f"Error in safety document generation: {e}")
+        console.print(f"[bold red]❌ Generation failed:[/bold red] {e}")
         raise
 
 if __name__ == "__main__":
