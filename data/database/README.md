@@ -10,6 +10,8 @@ To generate the complete Zava DIY database:
 # Navigate to the database directory
 cd data/database
 
+pip install -r requirements.txt
+
 # Run the generator (creates complete database)
 python generate_zava_postgres.py
 
