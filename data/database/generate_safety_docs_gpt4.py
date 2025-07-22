@@ -45,8 +45,11 @@ logger = logging.getLogger("safety_docs_generator")
 
 # GitHub Models API Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+endpoint = os.getenv("OPENAI_ENDPOINT", "https://models.github.ai/inference")
+model = os.getenv("OPENAI_MODEL", "openai/gpt-4.1")
+
 client = AsyncOpenAI(
-    base_url="https://models.inference.ai.azure.com",
+    base_url=endpoint,
     api_key=GITHUB_TOKEN,
 )
 
@@ -213,7 +216,7 @@ async def call_github_models_api(prompt: str, max_tokens: int = 1000) -> str:
     
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {
                     "role": "system",
