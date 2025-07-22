@@ -273,6 +273,19 @@ ai-tour-26-zava-diy-dataset-plus-mcp/
 - **🏗️ Infrastructure**: Azure deployment templates and configurations
 - **📚 Documentation**: Comprehensive guides and API documentation
 
+## Zava Web Chat Client
+
+This project includes a **Zava Web Chat Client** - a complete web application with HTML/CSS/JavaScript assets for building a basic web client interface. The web client provides a foundation for creating customer-facing chat applications that can integrate with the MCP servers for product search and sales assistance.
+
+**Key Features**:
+
+- **Web Application**: Pre-built Python web app for chat functionality (located in `src/python/web_app/`)
+- **Frontend Assets**: Complete HTML/CSS/JavaScript components for web interface (located in `src/shared/static/`)
+- **Integration Ready**: Designed to work with the project's MCP servers
+- **Customizable**: Basic client that you can wire up and customize for your project
+
+You'll need to wire up the web client to your specific project requirements and configure it to work with your chosen MCP servers and AI models.
+
 ## Getting Started with the Project
 
 1. **Set up the dev container** (see instructions above)
