@@ -8,30 +8,30 @@ Generates realistic safety documentation for hardware products using GitHub Mode
 - Environmental impact statements
 """
 
-import json
 import logging
 import os
 import random
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import asyncpg
-import aiohttp
+from openai import AsyncOpenAI
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.platypus.flowables import KeepTogether
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # GitHub Models API Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-GITHUB_API_URL = "https://models.inference.ai.azure.com/chat/completions"
+client = AsyncOpenAI(
+    base_url="https://models.inference.ai.azure.com",
+    api_key=GITHUB_TOKEN,
+)
 
 SDS_TEMPLATE = """
 # SAFETY DATA SHEET
@@ -190,44 +190,30 @@ Subject to periodic surveillance audits.
 """
 
 async def call_github_models_api(prompt: str, max_tokens: int = 1000) -> str:
-    """Call GitHub Models GPT-4.1 API to generate content"""
+    """Call GitHub Models GPT-4.1 API to generate content using OpenAI client"""
     if not GITHUB_TOKEN:
         raise ValueError("GITHUB_TOKEN environment variable not set")
     
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a technical writer specializing in safety documentation for hardware and construction products. Generate realistic but fictional safety data that follows industry standards and regulations. Include specific technical details, measurements, and procedures that would be found in professional safety documentation."
-            },
-            {
-                "role": "user", 
-                "content": prompt
-            }
-        ],
-        "model": "gpt-4o",
-        "temperature": 0.7,
-        "max_tokens": max_tokens
-    }
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(GITHUB_API_URL, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"].strip()
-                else:
-                    error_text = await response.text()
-                    logging.error(f"GitHub Models API error {response.status}: {error_text}")
-                    return "Error generating content - using fallback"
-        except Exception as e:
-            logging.error(f"Error calling GitHub Models API: {e}")
-            return "Error generating content - using fallback"
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a technical writer specializing in safety documentation for hardware and construction products. Generate realistic but fictional safety data that follows industry standards and regulations. Include specific technical details, measurements, and procedures that would be found in professional safety documentation."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ],
+            temperature=0.7,
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logging.error(f"Error calling GitHub Models API: {e}")
+        return "Error generating content - using fallback"
 
 async def generate_sds_content_gpt4(product: Dict, category: str) -> Dict[str, str]:
     """Generate realistic SDS content using GPT-4.1 with Zava-specific quirks and domain knowledge"""
@@ -296,7 +282,7 @@ async def generate_sds_content_gpt4(product: Dict, category: str) -> Dict[str, s
     physical_content = await call_github_models_api(physical_prompt, max_tokens=300)
     
     # Parse physical properties
-    lines = physical_content.split('\n')
+    physical_lines = physical_content.split('\n')
     generated_content.update({
         "appearance": "Varies by product specification",
         "odor": "Characteristic odor", 
@@ -307,7 +293,7 @@ async def generate_sds_content_gpt4(product: Dict, category: str) -> Dict[str, s
     })
     
     # Try to extract specific values from GPT response
-    for line in lines:
+    for line in physical_lines:
         if "appearance" in line.lower() or "color" in line.lower():
             generated_content["appearance"] = line.split(':', 1)[-1].strip()
         elif "odor" in line.lower():
