@@ -3,15 +3,20 @@ Write-Host "Deploying the Azure resources..."
 # Define resource group parameters
 $RG_LOCATION = "westus"
 $AI_PROJECT_FRIENDLY_NAME = "Zava DIY Agent Service Workshop"
+$RESOURCE_PREFIX = "zava-agent-wks"
+$UNIQUE_SUFFIX = -join ((65..90) + (97..122) | Get-Random -Count 4 | ForEach-Object { [char]$_ })
 
 # Deploy the Azure resources and save output to JSON
+Write-Host " Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX " -BackgroundColor Red -ForegroundColor White
 $deploymentName = "azure-ai-agent-service-lab-$(Get-Date -Format 'yyyyMMddHHmmss')"
 az deployment sub create `
   --name "$deploymentName" `
   --location "$RG_LOCATION" `
   --template-file main.bicep `
   --parameters "@main.parameters.json" `
-  --parameters location="$RG_LOCATION" | Out-File -FilePath output.json -Encoding utf8
+  --parameters location="$RG_LOCATION" `
+  --parameters resourcePrefix="$RESOURCE_PREFIX" `
+  --parameters uniqueSuffix="$UNIQUE_SUFFIX" | Out-File -FilePath output.json -Encoding utf8
 
 # Parse the JSON file using native PowerShell cmdlets
 if (-not (Test-Path -Path output.json)) {
@@ -26,7 +31,7 @@ $outputs = $jsonData.properties.outputs
 $projectsEndpoint = $outputs.projectsEndpoint.value
 $resourceGroupName = $outputs.resourceGroupName.value
 $subscriptionId = $outputs.subscriptionId.value
-$aiAccountName = $outputs.aiAccountName.value
+$aiFoundryName = $outputs.aiFoundryName.value
 $aiProjectName = $outputs.aiProjectName.value
 $azureOpenAIEndpoint = $projectsEndpoint -replace 'api/projects/.*$', ''
 $applicationInsightsConnectionString = $outputs.applicationInsightsConnectionString.value
@@ -59,58 +64,15 @@ EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
 "@ | Set-Content -Path $ENV_FILE_PATH
 
-# Update the root .env file with Azure OpenAI endpoint
+# Create fresh root .env file (always overwrite)
 $ROOT_ENV_FILE_PATH = "../.env"
-if (Test-Path $ROOT_ENV_FILE_PATH) {
-    # Read existing content
-    $envContent = Get-Content $ROOT_ENV_FILE_PATH
-    $updatedContent = @()
-    $azureEndpointUpdated = $false
-    $projectEndpointUpdated = $false
-    $appInsightsUpdated = $false
-    
-    foreach ($line in $envContent) {
-        if ($line -match '^AZURE_OPENAI_ENDPOINT=') {
-            $updatedContent += "AZURE_OPENAI_ENDPOINT=`"$azureOpenAIEndpoint`""
-            $azureEndpointUpdated = $true
-        }
-        elseif ($line -match '^PROJECT_ENDPOINT=') {
-            $updatedContent += "PROJECT_ENDPOINT=`"$projectsEndpoint`""
-            $projectEndpointUpdated = $true
-        }
-        elseif ($line -match '^APPLICATIONINSIGHTS_CONNECTION_STRING=') {
-            $updatedContent += "APPLICATIONINSIGHTS_CONNECTION_STRING=`"$applicationInsightsConnectionString`""
-            $appInsightsUpdated = $true
-        }
-        else {
-            $updatedContent += $line
-        }
-    }
-    
-    # Add missing entries
-    if (-not $azureEndpointUpdated) {
-        $updatedContent += "AZURE_OPENAI_ENDPOINT=`"$azureOpenAIEndpoint`""
-    }
-    if (-not $projectEndpointUpdated) {
-        $updatedContent += "PROJECT_ENDPOINT=`"$projectsEndpoint`""
-    }
-    if (-not $appInsightsUpdated) {
-        $updatedContent += "APPLICATIONINSIGHTS_CONNECTION_STRING=`"$applicationInsightsConnectionString`""
-    }
-    
-    # Write updated content back to file
-    $updatedContent | Set-Content -Path $ROOT_ENV_FILE_PATH
-}
-else {
-    # Create new root .env file if it doesn't exist
-    @"
+@"
 AZURE_OPENAI_ENDPOINT="$azureOpenAIEndpoint"
 PROJECT_ENDPOINT="$projectsEndpoint"
 GPT_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
 EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
 "@ | Set-Content -Path $ROOT_ENV_FILE_PATH
-}
 
 # Set the C# project path
 $CSHARP_PROJECT_PATH = "../src/csharp/workshop/AgentWorkshop.Client/AgentWorkshop.Client.csproj"
@@ -173,5 +135,6 @@ Write-Host ""
 Write-Host "📋 Resource Information:" -ForegroundColor Cyan
 Write-Host "  Resource Group: $resourceGroupName"
 Write-Host "  AI Project: $aiProjectName"
+Write-Host "  Foundry Resource: $aiFoundryName"
 Write-Host "  Application Insights: $applicationInsightsName"
 Write-Host ""

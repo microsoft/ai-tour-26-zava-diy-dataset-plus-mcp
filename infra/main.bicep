@@ -2,16 +2,16 @@ targetScope = 'subscription'
 
 // Parameters
 @description('Prefix for the resource group and resources')
-param resourcePrefix string = 'zava-agent-workshop'
+param resourcePrefix string
 
 @description('Location of the resource group to create or use for the deployment')
-param location string = 'eastus'
+param location string
 
 @description('Friendly name for your Azure AI resource')
 param aiProjectFriendlyName string = 'Agents standard project resource'
 
 @description('Description of your Azure AI resource displayed in Azure AI Foundry')
-param aiProjectDescription string = 'A standard project resource required for the agent setup.'
+param aiProjectDescription string
 
 @description('Set of tags to apply to all resources.')
 param tags object = {}
@@ -23,7 +23,7 @@ param models array = [
     format: 'OpenAI'
     version: '2024-07-18'
     skuName: 'GlobalStandard'
-    capacity: 140
+    capacity: 120
   }
   {
     name: 'text-embedding-3-small'
@@ -34,10 +34,10 @@ param models array = [
   }
 ]
 
-@description('Unique suffix for the resources')
+@description('Unique suffix for the resources. Must be 4 characters long.')
 @maxLength(4)
-@minLength(0)
-param uniqueSuffix string = substring(uniqueString(subscription().id, resourcePrefix), 0, 4)
+@minLength(4)
+param uniqueSuffix string
 
 var resourceGroupName = toLower('rg-${resourcePrefix}-${uniqueSuffix}')
 
@@ -54,8 +54,8 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-11-01' = {
 }
 
 // Calculate the unique suffix
-var aiProjectName = toLower('project-${uniqueSuffix}')
-var foundryResourceName = toLower('foundry-${uniqueSuffix}')
+var aiProjectName = toLower('prj-${resourcePrefix}-${uniqueSuffix}')
+var foundryResourceName = toLower('fdy-${resourcePrefix}-${uniqueSuffix}')
 var applicationInsightsName = toLower('appi-${resourcePrefix}-${uniqueSuffix}')
 
 module applicationInsights 'application-insights.bicep' = {
@@ -113,7 +113,7 @@ module foundryModelDeployments 'foundry-model-deployment.bicep' = [for (model, i
 // Outputs
 output subscriptionId string = subscription().subscriptionId
 output resourceGroupName string = rg.name
-output aiAccountName string = foundry.outputs.accountName
+output aiFoundryName string = foundry.outputs.accountName
 output aiProjectName string = foundryProject.outputs.aiProjectName
 output projectsEndpoint string = '${foundry.outputs.endpoint}api/projects/${foundryProject.outputs.aiProjectName}'
 output deployedModels array = [for (model, index) in models: {

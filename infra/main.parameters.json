@@ -2,17 +2,14 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "resourcePrefix": {
-      "value": "zava-agent-workshop"
-    },
     "location": {
-      "value": "eastus"
+      "value": "westus"
     },
     "aiProjectFriendlyName": {
       "value": "Zava Agent Service Workshop"
     },
     "aiProjectDescription": {
-      "value": "A standard project resource required for the agent setup."
+      "value": "Project resources required for the Zava Agent Workshop."
     },
     "models": {
       "value": [
@@ -21,7 +18,7 @@
           "format": "OpenAI",
           "version": "2024-07-18",
           "skuName": "GlobalStandard",
-          "capacity": 140
+          "capacity": 120
         },
         {
           "name": "text-embedding-3-small",

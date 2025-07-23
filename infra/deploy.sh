@@ -5,8 +5,11 @@ echo "Deploying the Azure resources..."
 # Define resource group parameters
 RG_LOCATION="westus"
 AI_PROJECT_FRIENDLY_NAME="Zava Agent Service Workshop"
+RESOURCE_PREFIX="zava-agent-wks"
+UNIQUE_SUFFIX=$(head /dev/urandom | tr -dc a-z0-9 | head -c 4)
 
 # Deploy the Azure resources and save output to JSON
+echo -e "\033[1;37;41m Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX \033[0m"
 echo "Starting Azure deployment..."
 DEPLOYMENT_NAME="azure-ai-agent-service-lab-$(date +%Y%m%d%H%M%S)"
 az deployment sub create \
@@ -15,6 +18,8 @@ az deployment sub create \
   --template-file main.bicep \
   --parameters @main.parameters.json \
   --parameters location="$RG_LOCATION" \
+  --parameters resourcePrefix="$RESOURCE_PREFIX" \
+  --parameters uniqueSuffix="$UNIQUE_SUFFIX" \
   --output json > output.json
 
 # Check if deployment was successful
@@ -32,7 +37,7 @@ fi
 PROJECTS_ENDPOINT=$(jq -r '.properties.outputs.projectsEndpoint.value' output.json)
 RESOURCE_GROUP_NAME=$(jq -r '.properties.outputs.resourceGroupName.value' output.json)
 SUBSCRIPTION_ID=$(jq -r '.properties.outputs.subscriptionId.value' output.json)
-AI_SERVICE_NAME=$(jq -r '.properties.outputs.aiAccountName.value' output.json)
+AI_FOUNDRY_NAME=$(jq -r '.properties.outputs.aiFoundryName.value' output.json)
 AI_PROJECT_NAME=$(jq -r '.properties.outputs.aiProjectName.value' output.json)
 AZURE_OPENAI_ENDPOINT=$(jq -r '.properties.outputs.projectsEndpoint.value' output.json | sed 's|api/projects/.*||')
 APPLICATIONINSIGHTS_CONNECTION_STRING=$(jq -r '.properties.outputs.applicationInsightsConnectionString.value' output.json)
@@ -59,37 +64,15 @@ mkdir -p "$(dirname "$ENV_FILE_PATH")"
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
 } > "$ENV_FILE_PATH"
 
-# Update the root .env file with Azure OpenAI endpoint
+# Create fresh root .env file (always overwrite)
 ROOT_ENV_FILE_PATH="../.env"
-if [ -f "$ROOT_ENV_FILE_PATH" ]; then
-  # Update existing AZURE_OPENAI_ENDPOINT line or append if not found
-  if grep -q "^AZURE_OPENAI_ENDPOINT=" "$ROOT_ENV_FILE_PATH"; then
-    sed -i "s|^AZURE_OPENAI_ENDPOINT=.*|AZURE_OPENAI_ENDPOINT=\"$AZURE_OPENAI_ENDPOINT\"|" "$ROOT_ENV_FILE_PATH"
-  else
-    echo "AZURE_OPENAI_ENDPOINT=\"$AZURE_OPENAI_ENDPOINT\"" >> "$ROOT_ENV_FILE_PATH"
-  fi
-  # Update PROJECT_ENDPOINT as well
-  if grep -q "^PROJECT_ENDPOINT=" "$ROOT_ENV_FILE_PATH"; then
-    sed -i "s|^PROJECT_ENDPOINT=.*|PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\"|" "$ROOT_ENV_FILE_PATH"
-  else
-    echo "PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\"" >> "$ROOT_ENV_FILE_PATH"
-  fi
-  # Update APPLICATIONINSIGHTS_CONNECTION_STRING as well
-  if grep -q "^APPLICATIONINSIGHTS_CONNECTION_STRING=" "$ROOT_ENV_FILE_PATH"; then
-    sed -i "s|^APPLICATIONINSIGHTS_CONNECTION_STRING=.*|APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\"|" "$ROOT_ENV_FILE_PATH"
-  else
-    echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\"" >> "$ROOT_ENV_FILE_PATH"
-  fi
-else
-  # Create new root .env file if it doesn't exist
-  {
-    echo "AZURE_OPENAI_ENDPOINT=\"$AZURE_OPENAI_ENDPOINT\""
-    echo "PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\""
-    echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
-    echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
-    echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
-  } > "$ROOT_ENV_FILE_PATH"
-fi
+{
+  echo "AZURE_OPENAI_ENDPOINT=\"$AZURE_OPENAI_ENDPOINT\""
+  echo "PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\""
+  echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
+  echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
+  echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
+} > "$ROOT_ENV_FILE_PATH"
 
 CSHARP_PROJECT_PATH="../src/csharp/workshop/AgentWorkshop.Client/AgentWorkshop.Client.csproj"
 
@@ -135,5 +118,6 @@ echo ""
 echo "📋 Resource Information:"
 echo "  Resource Group: $RESOURCE_GROUP_NAME"
 echo "  AI Project: $AI_PROJECT_NAME"
+echo "  Foundry Resource: $AI_FOUNDRY_NAME"
 echo "  Application Insights: $APPLICATION_INSIGHTS_NAME"
 echo ""
