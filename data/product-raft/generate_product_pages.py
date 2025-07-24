@@ -41,10 +41,10 @@ class ZavaProductPageGenerator:
         
     def load_product_data(self, json_file: str) -> Dict:
         """Load product data from JSON file"""
-        logger.info(f"Loading product data from [bold blue]{json_file}[/bold blue]")
+        logger.info(f"Loading product data from {json_file}")
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        logger.info(f"Successfully loaded product data")
+        logger.info("Successfully loaded product data")
         return data
     
     def extract_products(self, data: Dict) -> List[Dict]:
@@ -62,7 +62,7 @@ class ZavaProductPageGenerator:
                             product["subcategory"] = subcategory.replace("_", " ").title()
                             products.append(product)
         
-        logger.info(f"Extracted [bold green]{len(products)}[/bold green] products")
+        logger.info(f"Extracted {len(products)} products")
         return products
     
     async def generate_product_content(self, product: Dict) -> Dict[str, Any]:
@@ -116,7 +116,7 @@ class ZavaProductPageGenerator:
                 ])
             }
         except Exception as e:
-            logger.error(f"Error generating content for [red]{product.get('name', 'Unknown')}[/red]: {e}")
+            logger.error(f"Error generating content for {product.get('name', 'Unknown')}: {e}")
             return {
                 "description": f"Premium quality {product.get('name', 'product')} perfect for your DIY projects. Professional-grade construction ensures reliable performance for both amateur and professional use.",
                 "features": [
@@ -241,11 +241,11 @@ class ZavaProductPageGenerator:
             # Save PDF
             pdf.save(filepath)
             
-            logger.info(f"Generated PDF: [bold green]{filepath}[/bold green]")
+            logger.info(f"Generated PDF: {filepath}")
             return filepath
             
         except Exception as e:
-            logger.error(f"Error creating PDF for [red]{product.get('name', 'Unknown')}[/red]: {e}")
+            logger.error(f"Error creating PDF for {product.get('name', 'Unknown')}: {e}")
             # No cleanup needed for markdown-pdf
             return None
     
@@ -280,7 +280,7 @@ class ZavaProductPageGenerator:
         """Generate PDF pages for all products"""
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
-        logger.info(f"Created output directory: [bold blue]{output_dir}[/bold blue]")
+        logger.info(f"Created output directory: {output_dir}")
         
         # Load and extract products
         data = self.load_product_data(json_file)
@@ -288,7 +288,7 @@ class ZavaProductPageGenerator:
         
         if max_products:
             products = products[:max_products]
-            logger.info(f"Limited to first [bold yellow]{max_products}[/bold yellow] products")
+            logger.info(f"Limited to first {max_products} products")
         
         # Show summary panel
         summary_panel = Panel(
@@ -317,7 +317,7 @@ class ZavaProductPageGenerator:
                 
                 try:
                     # Generate content using single API call
-                    logger.info(f"Generating content for [bold]{product_name}[/bold]")
+                    logger.info(f"Generating content for {product_name}")
                     content = await self.generate_product_content(product)
                     
                     # Create PDF
@@ -327,7 +327,7 @@ class ZavaProductPageGenerator:
                     await asyncio.sleep(0.5)
                     
                 except Exception as e:
-                    logger.error(f"Error processing product [red]{product_name}[/red]: {e}")
+                    logger.error(f"Error processing product {product_name}: {e}")
                     continue
                 finally:
                     progress.update(task, advance=1)
@@ -369,13 +369,13 @@ def main(input_file: str, output_dir: str, limit: int, model: str):
     
     # Check if we have the GitHub token
     if not os.getenv("GITHUB_TOKEN"):
-        logger.error("[red]GITHUB_TOKEN not found in environment variables[/red]")
+        logger.error("GITHUB_TOKEN not found in environment variables")
         logger.error("Please ensure your .env file contains the GitHub token")
         raise click.ClickException("Missing required environment variable: GITHUB_TOKEN")
     
     # Validate input file
     if not os.path.exists(input_file):
-        logger.error(f"[red]Input file not found: {input_file}[/red]")
+        logger.error(f"Input file not found: {input_file}")
         raise click.ClickException(f"Input file not found: {input_file}")
     
     # Create generator with custom model
@@ -383,11 +383,11 @@ def main(input_file: str, output_dir: str, limit: int, model: str):
     generator.model = model
     
     # Log configuration
-    logger.info(f"Configuration:")
-    logger.info(f"  Input file: [blue]{input_file}[/blue]")
-    logger.info(f"  Output directory: [blue]{output_dir}[/blue]")
-    logger.info(f"  Product limit: [yellow]{limit or 'unlimited'}[/yellow]")
-    logger.info(f"  Model: [cyan]{model}[/cyan]")
+    logger.info("Configuration:")
+    logger.info(f"  Input file: {input_file}")
+    logger.info(f"  Output directory: {output_dir}")
+    logger.info(f"  Product limit: {limit or 'unlimited'}")
+    logger.info(f"  Model: {model}")
     
     # Run the generator
     asyncio.run(generator.generate_all_product_pages(input_file, output_dir, limit))
