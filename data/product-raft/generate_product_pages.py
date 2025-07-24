@@ -4,7 +4,7 @@ import json
 import os
 from typing import Dict, List, Any
 import asyncio
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI
 from dotenv import load_dotenv
 from markdown_pdf import MarkdownPdf, Section
 import tempfile
@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 
 class ZavaProductPageGenerator:
     def __init__(self):
-        self.client = AsyncOpenAI(
-            base_url="https://models.inference.ai.azure.com",
-            api_key=os.getenv("GITHUB_TOKEN")
+        self.client = AsyncAzureOpenAI(
+            azure_endpoint=os.getenv("OPENAI_API_ENDPOINT"),
+            api_key=os.getenv("OPENAI_API_KEY"),
+            api_version="2025-01-01-preview",
         )
         self.model = "gpt-4.1"
         self.console = console
