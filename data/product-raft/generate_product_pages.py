@@ -20,8 +20,24 @@ import base64
 from PIL import Image as PILImage
 import requests
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+from rich.panel import Panel
+from rich.text import Text
+import logging
 
 load_dotenv()
+
+# Configure Rich logging
+console = Console()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console, rich_tracebacks=True)]
+)
+logger = logging.getLogger(__name__)
 
 class ZavaProductPageGenerator:
     def __init__(self):
@@ -30,6 +46,7 @@ class ZavaProductPageGenerator:
             api_key=os.getenv("GITHUB_TOKEN")
         )
         self.model = "gpt-4o"
+        self.console = console
         
         # Zava brand colors
         self.brand_colors = {
@@ -40,13 +57,19 @@ class ZavaProductPageGenerator:
             'light': HexColor("#F1FAEE")        # Off White
         }
         
+        logger.info("Zava Product Page Generator initialized")
+        
     def load_product_data(self, json_file: str) -> Dict:
         """Load product data from JSON file"""
+        logger.info(f"Loading product data from [bold blue]{json_file}[/bold blue]")
         with open(json_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        logger.info(f"Successfully loaded product data")
+        return data
     
     def extract_products(self, data: Dict) -> List[Dict]:
         """Extract individual products from the nested JSON structure"""
+        logger.info("Extracting products from JSON data...")
         products = []
         
         for main_category, category_data in data.get("main_categories", {}).items():
@@ -59,6 +82,7 @@ class ZavaProductPageGenerator:
                             product["subcategory"] = subcategory.replace("_", " ").title()
                             products.append(product)
         
+        logger.info(f"Extracted [bold green]{len(products)}[/bold green] products")
         return products
     
     async def generate_product_description(self, product: Dict) -> str:
@@ -90,7 +114,7 @@ class ZavaProductPageGenerator:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"Error generating description for {product.get('name', 'Unknown')}: {e}")
+            logger.error(f"Error generating description for [red]{product.get('name', 'Unknown')}[/red]: {e}")
             return f"Premium quality {product.get('name', 'product')} perfect for your DIY projects. Professional-grade construction ensures reliable performance for both amateur and professional use."
     
     async def generate_features_list(self, product: Dict) -> List[str]:
@@ -120,7 +144,7 @@ class ZavaProductPageGenerator:
             features = response.choices[0].message.content.strip().split('\n')
             return [f.strip() for f in features if f.strip()]
         except Exception as e:
-            print(f"Error generating features for {product.get('name', 'Unknown')}: {e}")
+            logger.error(f"Error generating features for [red]{product.get('name', 'Unknown')}[/red]: {e}")
             return [
                 "Professional-grade construction",
                 "Durable materials for long-lasting use",
@@ -223,7 +247,7 @@ class ZavaProductPageGenerator:
                 img = Image(image_path, width=3*inch, height=3*inch)
                 story.append(img)
             except Exception as e:
-                print(f"Could not load image {image_path}: {e}")
+                logger.warning(f"Could not load image [yellow]{image_path}[/yellow]: {e}")
                 story.append(Paragraph("[Product Image]", 
                                      ParagraphStyle('ImagePlaceholder', parent=styles['Normal'],
                                                   alignment=TA_CENTER, fontSize=12,
@@ -285,7 +309,7 @@ class ZavaProductPageGenerator:
         
         # Build PDF
         doc.build(story)
-        print(f"Generated PDF: {filepath}")
+        logger.info(f"Generated PDF: [bold green]{filepath}[/bold green]")
         return filepath
     
     def find_product_image(self, product: Dict) -> str:
@@ -319,56 +343,95 @@ class ZavaProductPageGenerator:
         """Generate PDF pages for all products"""
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Created output directory: [bold blue]{output_dir}[/bold blue]")
         
         # Load and extract products
-        print("Loading product data...")
         data = self.load_product_data(json_file)
         products = self.extract_products(data)
         
         if max_products:
             products = products[:max_products]
+            logger.info(f"Limited to first [bold yellow]{max_products}[/bold yellow] products")
         
-        print(f"Found {len(products)} products to process")
+        # Show summary panel
+        summary_panel = Panel(
+            f"Processing [bold green]{len(products)}[/bold green] products\n"
+            f"Output directory: [blue]{output_dir}[/blue]\n"
+            f"Model: [cyan]{self.model}[/cyan]",
+            title="[bold]Product Page Generation[/bold]",
+            border_style="green"
+        )
+        console.print(summary_panel)
         
-        # Process products
-        for i, product in enumerate(products, 1):
-            print(f"Processing {i}/{len(products)}: {product.get('name', 'Unknown')}")
+        # Process products with progress bar
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Processing products...", total=len(products))
             
-            try:
-                # Generate content using GPT-4o
-                description = await self.generate_product_description(product)
-                features = await self.generate_features_list(product)
+            for i, product in enumerate(products, 1):
+                product_name = product.get('name', 'Unknown')
+                progress.update(task, description=f"Processing: {product_name[:30]}...")
                 
-                # Create PDF
-                self.create_product_pdf(product, description, features, output_dir)
-                
-                # Small delay to be respectful to the API
-                await asyncio.sleep(0.5)
-                
-            except Exception as e:
-                print(f"Error processing product {product.get('name', 'Unknown')}: {e}")
-                continue
+                try:
+                    # Generate content using GPT-4o
+                    logger.info(f"Generating content for [bold]{product_name}[/bold]")
+                    description = await self.generate_product_description(product)
+                    features = await self.generate_features_list(product)
+                    
+                    # Create PDF
+                    self.create_product_pdf(product, description, features, output_dir)
+                    
+                    # Small delay to be respectful to the API
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.error(f"Error processing product [red]{product_name}[/red]: {e}")
+                    continue
+                finally:
+                    progress.update(task, advance=1)
         
-        print(f"\nCompleted! Generated {len(products)} product pages in '{output_dir}' directory")
+        # Show completion message
+        completion_panel = Panel(
+            f"[bold green]✓ Successfully generated {len(products)} product pages[/bold green]\n"
+            f"Files saved to: [blue]{output_dir}[/blue]",
+            title="[bold green]Generation Complete![/bold green]",
+            border_style="green"
+        )
+        console.print(completion_panel)
 
 async def main():
+    # Display startup banner
+    startup_banner = Panel(
+        Text("ZAVA Product Page Generator", style="bold magenta", justify="center") + "\n" +
+        Text("Powered by GPT-4o and Rich logging", style="dim", justify="center"),
+        border_style="magenta",
+        padding=(1, 2)
+    )
+    console.print(startup_banner)
+    
     generator = ZavaProductPageGenerator()
     
     # Check if we have the GitHub token
     if not os.getenv("GITHUB_TOKEN"):
-        print("Error: GITHUB_TOKEN not found in environment variables")
-        print("Please ensure your .env file contains the GitHub token")
+        logger.error("[red]GITHUB_TOKEN not found in environment variables[/red]")
+        logger.error("Please ensure your .env file contains the GitHub token")
         sys.exit(1)
     
     json_file = "data/database/product_data.json"
     
     if not os.path.exists(json_file):
-        print(f"Error: {json_file} not found")
+        logger.error(f"[red]Error: {json_file} not found[/red]")
         sys.exit(1)
     
     # For demo purposes, limit to 5 products
     max_products = 5
-    print(f"Generating product pages for first {max_products} products...")
+    logger.info(f"Generating product pages for first [bold yellow]{max_products}[/bold yellow] products...")
     
     await generator.generate_all_product_pages(json_file, max_products=max_products)
 
