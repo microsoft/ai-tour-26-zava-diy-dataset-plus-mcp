@@ -26,6 +26,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from rich.panel import Panel
 from rich.text import Text
 import logging
+import click
 
 load_dotenv()
 
@@ -405,35 +406,56 @@ class ZavaProductPageGenerator:
         )
         console.print(completion_panel)
 
-async def main():
+@click.command()
+@click.option('--input-file', '-i', default="data/database/product_data.json", 
+              help='Path to the JSON file containing product data')
+@click.option('--output-dir', '-o', default="product_pages", 
+              help='Directory to save generated PDF files')
+@click.option('--limit', '-l', type=int, default=None, 
+              help='Maximum number of products to process (default: all)')
+@click.option('--model', '-m', default="gpt-4o", 
+              help='OpenAI model to use for content generation')
+@click.version_option(version='1.0.0', prog_name='Zava Product Page Generator')
+def main(input_file: str, output_dir: str, limit: int, model: str):
+    """
+    Generate professional product pages for Zava DIY store.
+    
+    This tool uses GPT-4o to generate compelling product descriptions and features,
+    then creates branded PDF product pages with rich formatting.
+    """
     # Display startup banner
     startup_banner = Panel(
         Text("ZAVA Product Page Generator", style="bold magenta", justify="center") + "\n" +
-        Text("Powered by GPT-4o and Rich logging", style="dim", justify="center"),
+        Text(f"Powered by {model} and Rich logging", style="dim", justify="center"),
         border_style="magenta",
         padding=(1, 2)
     )
     console.print(startup_banner)
     
-    generator = ZavaProductPageGenerator()
-    
     # Check if we have the GitHub token
     if not os.getenv("GITHUB_TOKEN"):
         logger.error("[red]GITHUB_TOKEN not found in environment variables[/red]")
         logger.error("Please ensure your .env file contains the GitHub token")
-        sys.exit(1)
+        raise click.ClickException("Missing required environment variable: GITHUB_TOKEN")
     
-    json_file = "data/database/product_data.json"
+    # Validate input file
+    if not os.path.exists(input_file):
+        logger.error(f"[red]Input file not found: {input_file}[/red]")
+        raise click.ClickException(f"Input file not found: {input_file}")
     
-    if not os.path.exists(json_file):
-        logger.error(f"[red]Error: {json_file} not found[/red]")
-        sys.exit(1)
+    # Create generator with custom model
+    generator = ZavaProductPageGenerator()
+    generator.model = model
     
-    # For demo purposes, limit to 5 products
-    max_products = 5
-    logger.info(f"Generating product pages for first [bold yellow]{max_products}[/bold yellow] products...")
+    # Log configuration
+    logger.info(f"Configuration:")
+    logger.info(f"  Input file: [blue]{input_file}[/blue]")
+    logger.info(f"  Output directory: [blue]{output_dir}[/blue]")
+    logger.info(f"  Product limit: [yellow]{limit or 'unlimited'}[/yellow]")
+    logger.info(f"  Model: [cyan]{model}[/cyan]")
     
-    await generator.generate_all_product_pages(json_file, max_products=max_products)
+    # Run the generator
+    asyncio.run(generator.generate_all_product_pages(input_file, output_dir, limit))
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

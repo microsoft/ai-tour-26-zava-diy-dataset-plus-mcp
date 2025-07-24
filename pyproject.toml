@@ -10,6 +10,7 @@ dependencies = [
     "azure-ai-agents==1.1.0b4",
     "azure-ai-projects==1.0.0b12",
     "azure-identity>=1.23.0,<2.0.0",
+    "click>=8.2.1",
     "fastapi>=0.115.14,<0.116.0",
     "httpx>=0.28.1,<0.29.0",
     "mcp>=1.10.0,<2.0.0",
