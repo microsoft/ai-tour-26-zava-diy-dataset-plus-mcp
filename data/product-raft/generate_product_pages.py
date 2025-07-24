@@ -156,9 +156,10 @@ class ZavaProductPageGenerator:
     
     def create_product_pdf(self, product: Dict, description: str, features: List[str], output_dir: str):
         """Create PDF product page"""
-        # Clean filename
+        # Clean filename with SKU prefix
+        sku = product.get('sku', 'NO_SKU')
         safe_name = "".join(c for c in product.get('name', 'product') if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{safe_name.replace(' ', '_')}.pdf"
+        filename = f"{sku}_{safe_name.replace(' ', '_')}.pdf"
         filepath = os.path.join(output_dir, filename)
         
         doc = SimpleDocTemplate(filepath, pagesize=letter, 
