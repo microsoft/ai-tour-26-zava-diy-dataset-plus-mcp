@@ -46,7 +46,7 @@ class ZavaProductPageGenerator:
             base_url="https://models.inference.ai.azure.com",
             api_key=os.getenv("GITHUB_TOKEN")
         )
-        self.model = "gpt-4o"
+        self.model = "gpt-4.1"
         self.console = console
         
         # Zava brand colors
@@ -413,7 +413,7 @@ class ZavaProductPageGenerator:
               help='Directory to save generated PDF files')
 @click.option('--limit', '-l', type=int, default=None, 
               help='Maximum number of products to process (default: all)')
-@click.option('--model', '-m', default="gpt-4o", 
+@click.option('--model', '-m', default="gpt-4.1", 
               help='OpenAI model to use for content generation')
 @click.version_option(version='1.0.0', prog_name='Zava Product Page Generator')
 def main(input_file: str, output_dir: str, limit: int, model: str):
