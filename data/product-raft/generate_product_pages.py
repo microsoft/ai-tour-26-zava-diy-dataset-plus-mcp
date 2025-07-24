@@ -75,38 +75,72 @@ class ZavaProductPageGenerator:
         Base Price: ${product.get('base_price', 'N/A')}
         SKU: {product.get('sku', 'N/A')}
         
-        Please provide a JSON response with the following structure:
+        Please provide a valid JSON response with the following structure. IMPORTANT: Escape all quotes and newlines properly in the JSON:
         {{
-            "description": "A compelling 150-200 word product description that includes key features, specifications, use cases, and quality assurance. Professional but approachable tone.",
+            "description": "A comprehensive 600-800 word product description with detailed chapters that makes this product stand out from competitors. Each chapter should be substantial (100-150 words) and engaging. Structure it with clear sections: **Product Overview** (introduce the product with compelling positioning), **Superior Engineering** (detailed technical innovations and manufacturing), **Professional Performance** (specific performance benefits and use cases), **What Sets Us Apart** (unique competitive advantages), and **Quality Promise** (warranty and quality assurance). Be creative with unique features, storytelling, and benefits that differentiate this product. Make each chapter informative and compelling. Use \\n\\n for paragraph breaks between chapters.",
             "features": [
-                "Feature 1 - Technical specification or quality feature",
-                "Feature 2 - Practical benefit or professional application",
-                "Feature 3 - Technical specification or quality feature",
-                "Feature 4 - Practical benefit or professional application",
-                "Feature 5 - Technical specification or quality feature",
-                "Feature 6 - Practical benefit or professional application"
+                "Feature 1 - Unique technical innovation or patented technology",
+                "Feature 2 - Superior material or construction advantage", 
+                "Feature 3 - Exclusive design element or ergonomic benefit",
+                "Feature 4 - Professional-grade performance characteristic",
+                "Feature 5 - Competitive advantage or unique selling point",
+                "Feature 6 - Quality assurance or warranty benefit",
+                "Feature 7 - Additional standout feature or customer benefit"
             ]
         }}
         
+        CRITICAL: Ensure the JSON is valid by:
+        - Using \\n for line breaks within strings
+        - Escaping all quotation marks within strings as \"
+        - No unescaped quotes or line breaks in the JSON structure
+        
         Focus on:
-        - Technical specifications and quality features
-        - Practical benefits and professional applications
-        - Brand positioning as a premium DIY store
-        - Professional quality assurance
+        - Unique innovations and patented technologies
+        - Superior materials and construction methods
+        - Exclusive design elements and ergonomic advantages
+        - Professional-grade performance that exceeds competition
+        - Compelling reasons to choose this over alternatives
+        - Creative and memorable product characteristics
+        - Premium quality positioning with specific differentiators
         """
         
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0.7,
                 response_format={"type": "json_object"}
             )
             import json
-            content = json.loads(response.choices[0].message.content.strip())
+            raw_content = response.choices[0].message.content.strip()
+            logger.debug(f"Raw LLM response: {raw_content[:200]}...")
+            
+            try:
+                content = json.loads(raw_content)
+            except json.JSONDecodeError as je:
+                logger.error(f"JSON parsing failed for {product.get('name', 'Unknown')}: {je}")
+                logger.error(f"Raw content: {raw_content}")
+                # Try to fix common JSON issues
+                fixed_content = raw_content.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+                try:
+                    content = json.loads(fixed_content)
+                    logger.info(f"Fixed JSON parsing for {product.get('name', 'Unknown')}")
+                except json.JSONDecodeError:
+                    # Give up and use fallback
+                    return {
+                        "description": f"Premium quality {product.get('name', 'product')} from Zava DIY store.",
+                        "features": [
+                            "Professional-grade construction",
+                            "Durable materials for long-lasting use", 
+                            "Ergonomic design for comfort",
+                            "Suitable for professional and DIY use",
+                            "Backed by Zava quality guarantee"
+                        ]
+                    }
+            
             return {
-                "description": content.get("description", f"Premium quality {product.get('name', 'product')} perfect for your DIY projects."),
+                "description": content.get("description", f"Premium quality {product.get('name', 'product')} from Zava DIY store."),
                 "features": content.get("features", [
                     "Professional-grade construction",
                     "Durable materials for long-lasting use",
@@ -118,7 +152,7 @@ class ZavaProductPageGenerator:
         except Exception as e:
             logger.error(f"Error generating content for {product.get('name', 'Unknown')}: {e}")
             return {
-                "description": f"Premium quality {product.get('name', 'product')} perfect for your DIY projects. Professional-grade construction ensures reliable performance for both amateur and professional use.",
+                "description": f"Premium quality {product.get('name', 'product')} from Zava DIY store. Professional-grade construction ensures reliable performance for both amateur and professional use.",
                 "features": [
                     "Professional-grade construction",
                     "Durable materials for long-lasting use",
