@@ -2,24 +2,12 @@
 
 import json
 import os
-import sys
 from typing import Dict, List, Any
-from pathlib import Path
 import asyncio
 from openai import AsyncOpenAI
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
-from reportlab.platypus.flowables import HRFlowable
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.lib import colors
-from io import BytesIO
-import base64
-from PIL import Image as PILImage
-import requests
 from dotenv import load_dotenv
+from markdown_pdf import MarkdownPdf, Section
+import tempfile
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
@@ -49,15 +37,6 @@ class ZavaProductPageGenerator:
         self.model = "gpt-4.1"
         self.console = console
         
-        # Zava brand colors
-        self.brand_colors = {
-            'primary': HexColor("#2C5530"),    # Forest Green
-            'secondary': HexColor("#F4A261"),   # Warm Orange
-            'accent': HexColor("#E76F51"),      # Coral Red
-            'neutral': HexColor("#264653"),     # Dark Green
-            'light': HexColor("#F1FAEE")        # Off White
-        }
-        
         logger.info("Zava Product Page Generator initialized")
         
     def load_product_data(self, json_file: str) -> Dict:
@@ -86,233 +65,189 @@ class ZavaProductPageGenerator:
         logger.info(f"Extracted [bold green]{len(products)}[/bold green] products")
         return products
     
-    async def generate_product_description(self, product: Dict) -> str:
-        """Generate detailed product description using GPT-4o"""
+    async def generate_product_content(self, product: Dict) -> Dict[str, Any]:
+        """Generate both product description and features in a single API call"""
         prompt = f"""
-        Create a compelling product description for a DIY/home improvement store called Zava. 
+        Create compelling product content for a DIY/home improvement store called Zava.
         
         Product: {product.get('name', 'Unknown Product')}
         Category: {product.get('main_category', '')} - {product.get('subcategory', '')}
         Base Price: ${product.get('base_price', 'N/A')}
         SKU: {product.get('sku', 'N/A')}
         
-        Write a professional product description that includes:
-        1. Key features and benefits
-        2. Specifications and technical details
-        3. Ideal use cases
-        4. Professional quality assurance
-        5. Brand positioning as a premium DIY store
-        
-        Keep it between 150-200 words, professional but approachable.
-        """
-        
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.7
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Error generating description for [red]{product.get('name', 'Unknown')}[/red]: {e}")
-            return f"Premium quality {product.get('name', 'product')} perfect for your DIY projects. Professional-grade construction ensures reliable performance for both amateur and professional use."
-    
-    async def generate_features_list(self, product: Dict) -> List[str]:
-        """Generate key features list using GPT-4o"""
-        prompt = f"""
-        Create 5-7 key bullet points for this product:
-        
-        Product: {product.get('name', 'Unknown Product')}
-        Category: {product.get('main_category', '')} - {product.get('subcategory', '')}
+        Please provide a JSON response with the following structure:
+        {{
+            "description": "A compelling 150-200 word product description that includes key features, specifications, use cases, and quality assurance. Professional but approachable tone.",
+            "features": [
+                "Feature 1 - Technical specification or quality feature",
+                "Feature 2 - Practical benefit or professional application",
+                "Feature 3 - Technical specification or quality feature",
+                "Feature 4 - Practical benefit or professional application",
+                "Feature 5 - Technical specification or quality feature",
+                "Feature 6 - Practical benefit or professional application"
+            ]
+        }}
         
         Focus on:
-        - Technical specifications
-        - Quality features
-        - Practical benefits
-        - Professional applications
-        
-        Return only the bullet points, one per line, without bullet symbols.
+        - Technical specifications and quality features
+        - Practical benefits and professional applications
+        - Brand positioning as a premium DIY store
+        - Professional quality assurance
         """
         
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.6
+                max_tokens=500,
+                temperature=0.7,
+                response_format={"type": "json_object"}
             )
-            features = response.choices[0].message.content.strip().split('\n')
-            return [f.strip() for f in features if f.strip()]
+            import json
+            content = json.loads(response.choices[0].message.content.strip())
+            return {
+                "description": content.get("description", f"Premium quality {product.get('name', 'product')} perfect for your DIY projects."),
+                "features": content.get("features", [
+                    "Professional-grade construction",
+                    "Durable materials for long-lasting use",
+                    "Ergonomic design for comfort",
+                    "Suitable for professional and DIY use",
+                    "Backed by Zava quality guarantee"
+                ])
+            }
         except Exception as e:
-            logger.error(f"Error generating features for [red]{product.get('name', 'Unknown')}[/red]: {e}")
-            return [
-                "Professional-grade construction",
-                "Durable materials for long-lasting use",
-                "Ergonomic design for comfort",
-                "Suitable for professional and DIY use",
-                "Backed by Zava quality guarantee"
-            ]
+            logger.error(f"Error generating content for [red]{product.get('name', 'Unknown')}[/red]: {e}")
+            return {
+                "description": f"Premium quality {product.get('name', 'product')} perfect for your DIY projects. Professional-grade construction ensures reliable performance for both amateur and professional use.",
+                "features": [
+                    "Professional-grade construction",
+                    "Durable materials for long-lasting use",
+                    "Ergonomic design for comfort",
+                    "Suitable for professional and DIY use",
+                    "Backed by Zava quality guarantee"
+                ]
+            }
+    
+    def create_product_markdown(self, product: Dict, description: str, features: List[str]) -> str:
+        """Generate markdown content for the product page"""
+        # Find product image
+        image_path = self.find_product_image(product)
+        image_markdown = f"![{product.get('name', 'Product')}]({image_path})" if image_path and os.path.exists(image_path) else "*[Product Image]*"
+        
+        markdown_content = f"""
+# ZAVA
+## DIY & Home Improvement
+
+---
+
+# {product.get('name', 'Product Name')} - ${product.get('base_price', '0.00')}
+
+**Category:** {product.get('main_category', '')} > {product.get('subcategory', '')}
+**SKU:** {product.get('sku', 'N/A')}
+
+## Product Image
+
+{image_markdown}
+
+## Product Description
+
+{description}
+
+## Key Features
+
+{chr(10).join([f"• {feature}" for feature in features])}
+
+## Specifications
+
+| Specification | Value |
+|--------------|-------|
+| Product Name | {product.get('name', 'N/A')} |
+| SKU | {product.get('sku', 'N/A')} |
+| Category | {product.get('main_category', '')} - {product.get('subcategory', '')} |
+| Base Price | ${product.get('base_price', '0.00')} |
+| Brand | Zava |
+| Warranty | Standard Manufacturer Warranty |
+
+---
+
+**ZAVA - Your Trusted Partner for DIY & Home Improvement**
+
+*Quality Products • Expert Advice • Competitive Prices*
+"""
+        return markdown_content
     
     def create_product_pdf(self, product: Dict, description: str, features: List[str], output_dir: str):
-        """Create PDF product page"""
+        """Create PDF product page from markdown"""
         # Clean filename with SKU prefix
         sku = product.get('sku', 'NO_SKU')
         safe_name = "".join(c for c in product.get('name', 'product') if c.isalnum() or c in (' ', '-', '_')).rstrip()
         filename = f"{sku}_{safe_name.replace(' ', '_')}.pdf"
         filepath = os.path.join(output_dir, filename)
         
-        doc = SimpleDocTemplate(filepath, pagesize=letter, 
-                              rightMargin=72, leftMargin=72, 
-                              topMargin=72, bottomMargin=18)
+        # Generate markdown content
+        markdown_content = self.create_product_markdown(product, description, features)
         
-        # Create styles
-        styles = getSampleStyleSheet()
-        
-        # Custom styles
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=20,
-            textColor=self.brand_colors['primary'],
-            alignment=TA_LEFT
-        )
-        
-        brand_style = ParagraphStyle(
-            'Brand',
-            parent=styles['Normal'],
-            fontSize=36,
-            textColor=self.brand_colors['primary'],
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        )
-        
-        subtitle_style = ParagraphStyle(
-            'Subtitle',
-            parent=styles['Heading2'],
-            fontSize=14,
-            textColor=self.brand_colors['neutral'],
-            spaceAfter=10
-        )
-        
-        price_style = ParagraphStyle(
-            'Price',
-            parent=styles['Normal'],
-            fontSize=20,
-            textColor=self.brand_colors['accent'],
-            fontName='Helvetica-Bold',
-            alignment=TA_RIGHT
-        )
-        
-        # Build PDF content
-        story = []
-        
-        # Header with brand
-        story.append(Paragraph("ZAVA", brand_style))
-        story.append(Paragraph("DIY & Home Improvement", 
-                              ParagraphStyle('Tagline', parent=styles['Normal'], 
-                                           fontSize=12, alignment=TA_CENTER,
-                                           textColor=self.brand_colors['neutral'])))
-        story.append(Spacer(1, 20))
-        story.append(HRFlowable(width="100%", thickness=2, color=self.brand_colors['primary']))
-        story.append(Spacer(1, 20))
-        
-        # Product title and price
-        header_data = [
-            [Paragraph(product.get('name', 'Product Name'), title_style),
-             Paragraph(f"${product.get('base_price', '0.00')}", price_style)]
-        ]
-        
-        header_table = Table(header_data, colWidths=[4*inch, 2*inch])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        story.append(header_table)
-        
-        # Category and SKU
-        story.append(Spacer(1, 10))
-        story.append(Paragraph(f"<b>Category:</b> {product.get('main_category', '')} > {product.get('subcategory', '')}", 
-                              styles['Normal']))
-        story.append(Paragraph(f"<b>SKU:</b> {product.get('sku', 'N/A')}", styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        # Product image placeholder
-        story.append(Paragraph("Product Image", subtitle_style))
-        
-        # Try to find and include product image
-        image_path = self.find_product_image(product)
-        if image_path and os.path.exists(image_path):
-            try:
-                img = Image(image_path, width=3*inch, height=3*inch)
-                story.append(img)
-            except Exception as e:
-                logger.warning(f"Could not load image [yellow]{image_path}[/yellow]: {e}")
-                story.append(Paragraph("[Product Image]", 
-                                     ParagraphStyle('ImagePlaceholder', parent=styles['Normal'],
-                                                  alignment=TA_CENTER, fontSize=12,
-                                                  textColor=colors.grey)))
-        else:
-            story.append(Paragraph("[Product Image]", 
-                                 ParagraphStyle('ImagePlaceholder', parent=styles['Normal'],
-                                              alignment=TA_CENTER, fontSize=12,
-                                              textColor=colors.grey)))
-        
-        story.append(Spacer(1, 20))
-        
-        # Product description
-        story.append(Paragraph("Product Description", subtitle_style))
-        story.append(Paragraph(description, styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        # Key features
-        story.append(Paragraph("Key Features", subtitle_style))
-        for feature in features:
-            story.append(Paragraph(f"• {feature}", styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        # Specifications table
-        story.append(Paragraph("Specifications", subtitle_style))
-        spec_data = [
-            ['Product Name', product.get('name', 'N/A')],
-            ['SKU', product.get('sku', 'N/A')],
-            ['Category', f"{product.get('main_category', '')} - {product.get('subcategory', '')}"],
-            ['Base Price', f"${product.get('base_price', '0.00')}"],
-            ['Brand', 'Zava'],
-            ['Warranty', 'Standard Manufacturer Warranty']
-        ]
-        
-        spec_table = Table(spec_data, colWidths=[2*inch, 3*inch])
-        spec_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), self.brand_colors['light']),
-            ('TEXTCOLOR', (0, 0), (0, -1), self.brand_colors['neutral']),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, self.brand_colors['light']]),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-        ]))
-        story.append(spec_table)
-        story.append(Spacer(1, 30))
-        
-        # Footer
-        story.append(HRFlowable(width="100%", thickness=1, color=self.brand_colors['primary']))
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("ZAVA - Your Trusted Partner for DIY & Home Improvement", 
-                              ParagraphStyle('Footer', parent=styles['Normal'], 
-                                           fontSize=10, alignment=TA_CENTER,
-                                           textColor=self.brand_colors['neutral'])))
-        story.append(Paragraph("Quality Products • Expert Advice • Competitive Prices", 
-                              ParagraphStyle('Footer2', parent=styles['Normal'], 
-                                           fontSize=8, alignment=TA_CENTER,
-                                           textColor=self.brand_colors['neutral'])))
-        
-        # Build PDF
-        doc.build(story)
-        logger.info(f"Generated PDF: [bold green]{filepath}[/bold green]")
-        return filepath
+        try:
+            # Create PDF converter
+            pdf = MarkdownPdf(toc_level=2)
+            
+            # Add CSS styling
+            custom_css = """
+            body { 
+                font-family: Arial, sans-serif; 
+                line-height: 1.6;
+                color: #333;
+            }
+            h1 { 
+                color: #2C5530; 
+                border-bottom: 2px solid #2C5530; 
+                padding-bottom: 10px;
+            }
+            h2 { 
+                color: #264653; 
+                margin-top: 30px;
+            }
+            table { 
+                border-collapse: collapse; 
+                width: 100%; 
+                margin: 20px 0;
+            }
+            th, td { 
+                border: 1px solid #ddd; 
+                padding: 12px; 
+                text-align: left;
+            }
+            th { 
+                background-color: #F1FAEE; 
+                color: #264653; 
+                font-weight: bold;
+            }
+            tr:nth-child(even) { 
+                background-color: #f9f9f9;
+            }
+            hr { 
+                border: 1px solid #2C5530; 
+                margin: 30px 0;
+            }
+            em { 
+                color: #666;
+            }
+            """
+            
+            # Create section from markdown content
+            section = Section(markdown_content, toc=False, paper_size='A4')
+            pdf.add_section(section, user_css=custom_css)
+            
+            # Save PDF
+            pdf.save(filepath)
+            
+            logger.info(f"Generated PDF: [bold green]{filepath}[/bold green]")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"Error creating PDF for [red]{product.get('name', 'Unknown')}[/red]: {e}")
+            # No cleanup needed for markdown-pdf
+            return None
     
     def find_product_image(self, product: Dict) -> str:
         """Find product image file"""
@@ -381,13 +316,12 @@ class ZavaProductPageGenerator:
                 progress.update(task, description=f"Processing: {product_name[:30]}...")
                 
                 try:
-                    # Generate content using GPT-4o
+                    # Generate content using single API call
                     logger.info(f"Generating content for [bold]{product_name}[/bold]")
-                    description = await self.generate_product_description(product)
-                    features = await self.generate_features_list(product)
+                    content = await self.generate_product_content(product)
                     
                     # Create PDF
-                    self.create_product_pdf(product, description, features, output_dir)
+                    self.create_product_pdf(product, content["description"], content["features"], output_dir)
                     
                     # Small delay to be respectful to the API
                     await asyncio.sleep(0.5)
