@@ -24,4 +24,5 @@ src/workshop/[.][v]env/
 DevTunnels/devtunnels-tokens-microsoft
 DevTunnels/devtunnels.json
 infra/output.json
-product_pages/
+product_pages*/
+

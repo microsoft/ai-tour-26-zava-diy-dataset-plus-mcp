@@ -110,57 +110,52 @@ class ZavaProductPageGenerator:
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=800,
                 temperature=0.7,
-                response_format={"type": "json_object"}
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "product_content",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "description": {
+                                    "type": "string",
+                                    "description": "Comprehensive product description with detailed chapters"
+                                },
+                                "features": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "minItems": 5,
+                                    "maxItems": 10,
+                                    "description": "List of key product features"
+                                }
+                            },
+                            "required": ["description", "features"],
+                            "additionalProperties": False
+                        }
+                    }
+                }
             )
             import json
             raw_content = response.choices[0].message.content.strip()
-            logger.debug(f"Raw LLM response: {raw_content[:200]}...")
             
             try:
                 content = json.loads(raw_content)
+                return {
+                    "description": content["description"],
+                    "features": content["features"]
+                }
             except json.JSONDecodeError as je:
                 logger.error(f"JSON parsing failed for {product.get('name', 'Unknown')}: {je}")
                 logger.error(f"Raw content: {raw_content}")
-                # Try to fix common JSON issues
-                fixed_content = raw_content.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-                try:
-                    content = json.loads(fixed_content)
-                    logger.info(f"Fixed JSON parsing for {product.get('name', 'Unknown')}")
-                except json.JSONDecodeError:
-                    # Give up and use fallback
-                    return {
-                        "description": f"Premium quality {product.get('name', 'product')} from Zava DIY store.",
-                        "features": [
-                            "Professional-grade construction",
-                            "Durable materials for long-lasting use", 
-                            "Ergonomic design for comfort",
-                            "Suitable for professional and DIY use",
-                            "Backed by Zava quality guarantee"
-                        ]
-                    }
-            
-            return {
-                "description": content.get("description", f"Premium quality {product.get('name', 'product')} from Zava DIY store."),
-                "features": content.get("features", [
-                    "Professional-grade construction",
-                    "Durable materials for long-lasting use",
-                    "Ergonomic design for comfort",
-                    "Suitable for professional and DIY use",
-                    "Backed by Zava quality guarantee"
-                ])
-            }
+                logger.warning(f"Skipping document for {product.get('name', 'Unknown')} due to JSON parsing failure")
+                return None
         except Exception as e:
             logger.error(f"Error generating content for {product.get('name', 'Unknown')}: {e}")
-            return {
-                "description": f"Premium quality {product.get('name', 'product')} from Zava DIY store. Professional-grade construction ensures reliable performance for both amateur and professional use.",
-                "features": [
-                    "Professional-grade construction",
-                    "Durable materials for long-lasting use",
-                    "Ergonomic design for comfort",
-                    "Suitable for professional and DIY use",
-                    "Backed by Zava quality guarantee"
-                ]
-            }
+            logger.warning(f"Skipping document for {product.get('name', 'Unknown')} due to API error")
+            return None
     
     def create_product_markdown(self, product: Dict, description: str, features: List[str]) -> str:
         """Generate markdown content for the product page"""
@@ -353,6 +348,11 @@ class ZavaProductPageGenerator:
                     # Generate content using single API call
                     logger.info(f"Generating content for {product_name}")
                     content = await self.generate_product_content(product)
+                    
+                    # Skip if content generation failed
+                    if content is None:
+                        logger.info(f"Skipping PDF generation for {product_name}")
+                        continue
                     
                     # Create PDF
                     self.create_product_pdf(product, content["description"], content["features"], output_dir)
