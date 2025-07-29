@@ -36,6 +36,8 @@ $aiProjectName = $outputs.aiProjectName.value
 $azureOpenAIEndpoint = $projectsEndpoint -replace 'api/projects/.*$', ''
 $applicationInsightsConnectionString = $outputs.applicationInsightsConnectionString.value
 $applicationInsightsName = $outputs.applicationInsightsName.value
+$postgresServerFqdn = $outputs.postgresServerFqdn.value
+$postgresServerUsername = $outputs.postgresServerUsername.value
 
 if ([string]::IsNullOrEmpty($projectsEndpoint)) {
     Write-Host "Error: projectsEndpoint not found. Possible deployment failure."
@@ -62,6 +64,8 @@ PROJECT_ENDPOINT=$projectsEndpoint
 GPT_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
 EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
+POSTGRES_SERVER_FQDN="$postgresServerFqdn"
+POSTGRES_SERVER_USERNAME="$postgresServerUsername"
 "@ | Set-Content -Path $ENV_FILE_PATH
 
 # Create fresh root .env file (always overwrite)
@@ -72,6 +76,8 @@ PROJECT_ENDPOINT="$projectsEndpoint"
 GPT_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
 EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
+POSTGRES_SERVER_FQDN="$postgresServerFqdn"
+POSTGRES_SERVER_USERNAME="$postgresServerUsername"
 "@ | Set-Content -Path $ROOT_ENV_FILE_PATH
 
 # Set the C# project path
@@ -137,4 +143,6 @@ Write-Host "  Resource Group: $resourceGroupName"
 Write-Host "  AI Project: $aiProjectName"
 Write-Host "  Foundry Resource: $aiFoundryName"
 Write-Host "  Application Insights: $applicationInsightsName"
+Write-Host "  PostgreSQL Server: $postgresServerFqdn"
+Write-Host "  PostgreSQL Username: $postgresServerUsername"
 Write-Host ""
