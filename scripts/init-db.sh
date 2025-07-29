@@ -29,7 +29,7 @@ fi
 
 # Create the zava database
 echo "📦 Creating 'zava' database..."
-psql -v ON_ERROR_STOP=0 --dbname "postgres" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --dbname "postgres" <<-EOSQL
     CREATE DATABASE zava;
     GRANT ALL PRIVILEGES ON DATABASE zava TO "$PGUSER";
 EOSQL
