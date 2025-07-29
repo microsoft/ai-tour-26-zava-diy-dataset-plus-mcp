@@ -4,7 +4,9 @@ This directory contains the PostgreSQL database generator for **Zava DIY**, a fi
 
 ## Quick Start
 
-To generate the complete Zava DIY database:
+### How to Generate the Zava DIY PostgreSQL Database
+
+To generate the complete Zava DIY PostgreSQL database:
 
 ```bash
 # Navigate to the database directory
@@ -27,9 +29,24 @@ python generate_zava_postgres.py --help                # Show all options
 ```
 
 **Prerequisites:**
+
 - PostgreSQL 17+ with pgvector extension
 - Python 3.13+ with required packages (asyncpg, faker, python-dotenv)
 - Required JSON data files: `product_data.json` and `reference_data.json`
+
+### How to Generate the Zava DIY SQL Server Database
+
+To generate the SQL Server compatible database schema and data:
+
+```bash
+# Navigate to the database directory
+cd data/database
+pip install -r requirements.txt
+# Run the SQL Server generator
+python generate_zava_sql_server.py
+```
+
+This will create a SQL Server compatible schema and populate it with the same data as the PostgreSQL version.
 
 ## Available Tools
 
@@ -38,6 +55,7 @@ This directory contains several utility tools for managing and working with the 
 ### **Core Database Tools**
 
 - **`generate_zava_postgres.py`** - Main database generator that creates the complete Zava DIY retail database with realistic sales data, seasonal patterns, and AI embeddings
+- **`generate_zava_sql_server.py`** - Generates a SQL Server compatible database schema and data
 - **`count_products.py`** - Analyzes and reports product counts across categories and embedding status from the JSON data files
 
 ### **Product Management Tools**
@@ -325,6 +343,7 @@ Defines the complete product catalog with embeddings and seasonal patterns:
 ```
 
 **Key Points:**
+
 - `washington_seasonal_multipliers`: Optional 12-element array for seasonal demand patterns (January through December)
 - `image_embedding`: 512-dimensional vector for image similarity search with pgvector
 - `description_embedding`: 1536-dimensional vector for text similarity search with pgvector
@@ -352,6 +371,7 @@ Defines store configurations and business rules:
 ```
 
 **Key Points:**
+
 - `rls_user_id`: UUID for Row Level Security policies (store manager access control)
 - Distribution weights: Control customer and sales allocation across stores
 - Order multipliers: Scale order frequency and value by store characteristics
@@ -360,6 +380,7 @@ Defines store configurations and business rules:
 ### Database Connection Configuration
 
 The generator connects to PostgreSQL using these default settings:
+
 - **Host**: `db` (Docker container)
 - **Port**: `5432`
 - **Database**: `zava`

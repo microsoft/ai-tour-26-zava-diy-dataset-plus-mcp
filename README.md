@@ -6,7 +6,7 @@ A comprehensive demonstration project featuring a realistic PostgreSQL dataset f
 
 This project provides:
 
-- **🏪 Realistic Retail Dataset**: A complete PostgreSQL database with 50,000+ customers, 400+ products, 200,000+ transactions, and AI-ready vector embeddings
+- **🏪 Realistic Retail Dataset**: A complete PostgreSQL and MS SQL database with 50,000+ customers, 400+ products, 200,000+ transactions, and AI-ready vector embeddings
 - **🔍 Customer Sales MCP Servers**: Two intelligent product search servers - basic name-based search and advanced semantic search with AI
 - **📊 Sales Analysis MCP Server**: Comprehensive sales database access for AI-powered analytics and insights
 - **🔒 Row Level Security**: Multi-tenant security ensuring store managers only access their store's data
