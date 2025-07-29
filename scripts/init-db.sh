@@ -11,7 +11,6 @@ else
     echo "⚠️  .env not found, using default environment variables"
 fi
 
-export POSTGRES_DB="${POSTGRES_DB:-postgres}"
 # If the host is an Azure server (based off POSTGRES_SERVER_FQDN existing), get password a special way
 if [ -n "$POSTGRES_SERVER_FQDN" ]; then
     echo "🔑 Using Azure authentication for PostgreSQL"
@@ -20,7 +19,6 @@ if [ -n "$POSTGRES_SERVER_FQDN" ]; then
     export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)" 
     export PGPORT="${PGPORT:-5432}"
     export PGSSLMODE="require"
-    echo "${PGHOST} ${PGUSER} ${PGPASSWORD}"  # Debugging line to show connection details
 else
     echo "🔑 Using local PostgreSQL authentication"
     # Using default postgres user and password
@@ -31,9 +29,9 @@ fi
 
 # Create the zava database
 echo "📦 Creating 'zava' database..."
-psql -v ON_ERROR_STOP=1 --dbname "$POSTGRES_DB" <<-EOSQL
+psql -v ON_ERROR_STOP=0 --dbname "postgres" <<-EOSQL
     CREATE DATABASE zava;
-    GRANT ALL PRIVILEGES ON DATABASE zava TO $POSTGRES_USER;
+    GRANT ALL PRIVILEGES ON DATABASE zava TO "$PGUSER";
 EOSQL
 
 # Install pgvector extension in the zava database
@@ -63,40 +61,30 @@ psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
 EOSQL
 
 # Check if backup file exists and restore it
-BACKUP_FILE_NEW="/docker-entrypoint-initdb.d/backups/zava_retail_2025_07_21_postgres_rls.backup"
-
-echo "🔍 Checking for backup files..."
-echo "📁 Contents of backup directory:"
-ls -la /docker-entrypoint-initdb.d/backups/ || echo "Backup directory not found"
-
-# Check file permissions and existence
-if [ -d "/docker-entrypoint-initdb.d/backups" ]; then
-    echo "📋 Backup directory exists"
-    echo "🔍 Looking for backup files..."
-    find /docker-entrypoint-initdb.d/backups -name "*.backup" -ls || echo "No .backup files found"
-else
-    echo "❌ Backup directory does not exist"
-fi
-
-# Try the newer backup file first, then fall back to the older one
-if [ -f "$BACKUP_FILE_NEW" ]; then
-    BACKUP_FILE="$BACKUP_FILE_NEW"
-    echo "📂 Found newer backup file with RLS: $BACKUP_FILE"
-else
-    BACKUP_FILE=""
-    echo "❌ No backup files found"
-fi
-
-if [ -n "$BACKUP_FILE" ]; then
+BACKUP_FILE="data/zava_retail_2025_07_21_postgres_rls.backup"
+if [ -f "$BACKUP_FILE" ]; then
+    echo "📂 Found backup file with RLS: $BACKUP_FILE"
     echo "🚀 Restoring data from: $BACKUP_FILE"
     echo "📊 Backup file size: $(stat -c%s "$BACKUP_FILE" 2>/dev/null || stat -f%z "$BACKUP_FILE" 2>/dev/null || echo "unknown") bytes"
     
     # Test if pg_restore can read the file
     echo "🔍 Testing backup file integrity..."
-    if pg_restore -l "$BACKUP_FILE" >/dev/null 2>&1; then
+
+    if RESTORE_ERROR=$(pg_restore -l "$BACKUP_FILE" 2>&1 >/dev/null); then
         echo "✅ Backup file is valid"
     else
         echo "❌ Backup file appears to be corrupted or invalid"
+        echo "📋 Error details: $RESTORE_ERROR"
+        
+        # Check for version compatibility issues
+        if echo "$RESTORE_ERROR" | grep -q "unsupported version"; then
+            echo "⚠️  This appears to be a PostgreSQL version compatibility issue."
+            echo "🔧 Make sure you're using pg_restore from PostgreSQL 17 or newer."
+            echo "🔧 PostgreSQL version information:"
+            echo "   psql version: $(psql --version)"
+            echo "   pg_restore version: $(pg_restore --version)"
+        fi
+        
         BACKUP_FILE=""
     fi
 fi

@@ -111,7 +111,6 @@ module foundryModelDeployments 'foundry-model-deployment.bicep' = [for (model, i
 }]
 
 
-var principalId = deployer().objectId
 module postgresServer 'postgres.bicep' = {
   name: 'postgresql'
   scope: rg
@@ -126,11 +125,8 @@ module postgresServer 'postgres.bicep' = {
     storage: {
       storageSizeGB: 32
     }
-    version: '15'
+    version: '17'
     authType: 'EntraOnly'
-    entraAdministratorName: 'admin${uniqueString(rg.id, principalId)}'
-    entraAdministratorObjectId: principalId
-    entraAdministratorType: 'User'
     allowAzureIPsFirewall: true
     allowAllIPsFirewall: true // Necessary for post-provision script, can be disabled after
   }
@@ -150,4 +146,4 @@ output applicationInsightsName string = applicationInsights.outputs.applicationI
 output applicationInsightsConnectionString string = applicationInsights.outputs.connectionString
 output applicationInsightsInstrumentationKey string = applicationInsights.outputs.instrumentationKey
 output postgresServerFqdn string = postgresServer.outputs.domain
-output postgresServerUsername string = deployer().userPrincipalName
+output postgresServerUsername string = postgresServer.outputs.username

@@ -15,20 +15,6 @@ param administratorLogin string = ''
 @secure()
 param administratorLoginPassword string = ''
 
-@description('Entra admin role name')
-param entraAdministratorName string = ''
-
-@description('Entra admin role object ID (in Entra)')
-param entraAdministratorObjectId string = ''
-
-@description('Entra admin user type')
-@allowed([
-  'User'
-  'Group'
-  'ServicePrincipal'
-])
-param entraAdministratorType string = 'User'
-
 
 param databaseNames array = []
 param allowAzureIPsFirewall bool = false
@@ -103,11 +89,11 @@ resource firewall_single 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRule
 // This must be created *after* the server is created - it cannot be a nested child resource
 resource addAddUser 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2023-03-01-preview' = {
   parent: postgresServer
-  name: entraAdministratorObjectId
+  name: deployer().objectId
   properties: {
     tenantId: subscription().tenantId
-    principalType: entraAdministratorType
-    principalName: entraAdministratorName
+    principalType: 'User'
+    principalName: deployer().userPrincipalName
   }
   // This is a workaround for a bug in the API that requires the parent to be fully resolved
   dependsOn: [firewall_all, firewall_azure]
@@ -128,3 +114,4 @@ resource configurations 'Microsoft.DBforPostgreSQL/flexibleServers/configuration
 
 
 output domain string =  postgresServer.properties.fullyQualifiedDomainName
+output username string = authType == 'Password' ? administratorLogin : deployer().userPrincipalName
