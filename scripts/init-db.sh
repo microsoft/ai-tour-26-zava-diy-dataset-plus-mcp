@@ -3,22 +3,48 @@ set -e
 
 echo "🚀 Initializing Zava PostgreSQL Database..."
 
+# Load from .env file if it exists
+if [ -f ".env" ]; then
+    echo "🔍 Loading environment variables from .env"
+    export $(grep -v '^#' .env | xargs)
+else
+    echo "⚠️  .env not found, using default environment variables"
+fi
+
+export POSTGRES_DB="${POSTGRES_DB:-postgres}"
+# If the host is an Azure server (based off POSTGRES_SERVER_FQDN existing), get password a special way
+if [ -n "$POSTGRES_SERVER_FQDN" ]; then
+    echo "🔑 Using Azure authentication for PostgreSQL"
+    export PGHOST="${POSTGRES_SERVER_FQDN}"
+    export PGUSER="${POSTGRES_SERVER_USERNAME}"
+    export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)" 
+    export PGPORT="${PGPORT:-5432}"
+    export PGSSLMODE="require"
+    echo "${PGHOST} ${PGUSER} ${PGPASSWORD}"  # Debugging line to show connection details
+else
+    echo "🔑 Using local PostgreSQL authentication"
+    # Using default postgres user and password
+    export PGHOST="${PGHOST:-localhost}"
+    export PGUSER="${PGUSER:-postgres}"
+    export PGPASSWORD="${PGPASSWORD:-postgres}"
+fi
+
 # Create the zava database
 echo "📦 Creating 'zava' database..."
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --dbname "$POSTGRES_DB" <<-EOSQL
     CREATE DATABASE zava;
     GRANT ALL PRIVILEGES ON DATABASE zava TO $POSTGRES_USER;
 EOSQL
 
 # Install pgvector extension in the zava database
 echo "🔧 Installing pgvector extension in 'zava' database..."
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
     CREATE EXTENSION IF NOT EXISTS vector;
 EOSQL
 
 # Create store_manager user for RLS testing (defer retail schema permissions until after restoration)
 echo "👤 Creating 'store_manager' user for Row Level Security testing..."
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
     -- Create store_manager user if it doesn't exist
     DO \$\$
     BEGIN
@@ -80,13 +106,13 @@ if [ -n "$BACKUP_FILE" ]; then
     
     # Create the retail schema first if it doesn't exist
     echo "🔧 Ensuring retail schema exists..."
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+    psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
         CREATE SCHEMA IF NOT EXISTS retail;
 EOSQL
     
     # CRITICAL: Disable RLS temporarily for restoration
     echo "🔓 Temporarily disabling Row Level Security for restoration..."
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+    psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
         -- Disable RLS on all tables that might have it
         DO \$\$
         DECLARE
@@ -114,7 +140,7 @@ EOSQL
     # Method 1: Try standard restoration with better error handling
     echo "🔧 Method 1: Standard restore with --clean --if-exists"
     RESTORE_OUTPUT=$(mktemp)
-    if pg_restore -v --username "$POSTGRES_USER" --dbname "zava" --clean --if-exists --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
+    if pg_restore -v --dbname "zava" --clean --if-exists --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
         echo "✅ Standard restoration successful"
         RESTORE_SUCCESS=true
     else
@@ -125,7 +151,7 @@ EOSQL
         
         # Method 2: Try without --clean --if-exists
         echo "🔧 Method 2: Restore without --clean --if-exists"
-        if pg_restore -v --username "$POSTGRES_USER" --dbname "zava" --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
+        if pg_restore -v --dbname "zava" --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
             echo "✅ Alternative restoration successful"
             RESTORE_SUCCESS=true
         else
@@ -138,11 +164,11 @@ EOSQL
             echo "🔧 Method 3: Schema-only followed by data-only restoration"
             
             # First restore schema
-            if pg_restore -v --username "$POSTGRES_USER" --dbname "zava" --schema-only --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
+            if pg_restore -v --dbname "zava" --schema-only --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
                 echo "✅ Schema restoration successful"
                 
                 # Then restore data
-                if pg_restore -v --username "$POSTGRES_USER" --dbname "zava" --data-only --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
+                if pg_restore -v --dbname "zava" --data-only --no-owner --no-privileges "$BACKUP_FILE" 2>"$RESTORE_OUTPUT"; then
                     echo "✅ Data restoration successful"
                     RESTORE_SUCCESS=true
                 else
@@ -177,26 +203,26 @@ EOSQL
         echo "🔍 Verifying restoration..."
         
         # Check if retail schema exists
-        SCHEMA_EXISTS=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'retail';" 2>/dev/null | tr -d ' \n' || echo "0")
+        SCHEMA_EXISTS=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'retail';" 2>/dev/null | tr -d ' \n' || echo "0")
         
         if [ "$SCHEMA_EXISTS" -gt 0 ]; then
             echo "✅ Retail schema exists"
             
             # Check table count
-            TABLE_COUNT=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'retail';" 2>/dev/null | tr -d ' \n' || echo "0")
+            TABLE_COUNT=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'retail';" 2>/dev/null | tr -d ' \n' || echo "0")
             
             if [ "$TABLE_COUNT" -gt 0 ]; then
                 echo "✅ Found $TABLE_COUNT tables in retail schema"
                 
                 # List all tables
                 echo "📋 Tables found:"
-                psql --username "$POSTGRES_USER" --dbname "zava" -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'retail' ORDER BY table_name;" 2>/dev/null | grep -v "^$" | grep -v "table_name" | grep -v "^-" | grep -v "rows)" | sed 's/^/   - /'
+                psql --dbname "zava" -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'retail' ORDER BY table_name;" 2>/dev/null | grep -v "^$" | grep -v "table_name" | grep -v "^-" | grep -v "rows)" | sed 's/^/   - /'
                 
                 # Check for some expected tables and their data
-                STORES_COUNT=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM retail.stores;" 2>/dev/null | tr -d ' \n' || echo "0")
-                CUSTOMERS_COUNT=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM retail.customers;" 2>/dev/null | tr -d ' \n' || echo "0")
-                PRODUCTS_COUNT=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM retail.products;" 2>/dev/null | tr -d ' \n' || echo "0")
-                ORDERS_COUNT=$(psql -t --username "$POSTGRES_USER" --dbname "zava" -c "SELECT COUNT(*) FROM retail.orders;" 2>/dev/null | tr -d ' \n' || echo "0")
+                STORES_COUNT=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM retail.stores;" 2>/dev/null | tr -d ' \n' || echo "0")
+                CUSTOMERS_COUNT=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM retail.customers;" 2>/dev/null | tr -d ' \n' || echo "0")
+                PRODUCTS_COUNT=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM retail.products;" 2>/dev/null | tr -d ' \n' || echo "0")
+                ORDERS_COUNT=$(psql -t --dbname "zava" -c "SELECT COUNT(*) FROM retail.orders;" 2>/dev/null | tr -d ' \n' || echo "0")
                 
                 echo "📊 Data verification:"
                 echo "   - Stores: $STORES_COUNT"
@@ -224,7 +250,7 @@ EOSQL
         
         # CRITICAL: Re-enable RLS and recreate policies after successful restoration
         echo "🔒 Re-enabling Row Level Security and recreating policies..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+        psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
             -- Re-enable RLS on all tables and recreate policies
             DO \$\$
             DECLARE
@@ -289,7 +315,7 @@ EOSQL
         
         # Re-grant permissions to store_manager after restoration
         echo "🔑 Re-granting permissions to store_manager after restoration..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "zava" <<-EOSQL
+        psql -v ON_ERROR_STOP=1 --dbname "zava" <<-EOSQL
             -- Re-grant permissions on all tables and sequences in retail schema
             GRANT USAGE ON SCHEMA retail TO store_manager;
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA retail TO store_manager;

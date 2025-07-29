@@ -6,7 +6,8 @@ echo "Deploying the Azure resources..."
 RG_LOCATION="westus"
 AI_PROJECT_FRIENDLY_NAME="Zava Agent Service Workshop"
 RESOURCE_PREFIX="zava-agent-wks"
-UNIQUE_SUFFIX=$(head /dev/urandom | tr -dc a-z0-9 | head -c 4)
+UNIQUE_SUFFIX=$(openssl rand -hex 2 | tr '[:upper:]' '[:lower:]') #
+UNIQUE_SUFFIX="d753"
 
 # Deploy the Azure resources and save output to JSON
 echo -e "\033[1;37;41m Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX \033[0m"
@@ -42,6 +43,8 @@ AI_PROJECT_NAME=$(jq -r '.properties.outputs.aiProjectName.value' output.json)
 AZURE_OPENAI_ENDPOINT=$(jq -r '.properties.outputs.projectsEndpoint.value' output.json | sed 's|api/projects/.*||')
 APPLICATIONINSIGHTS_CONNECTION_STRING=$(jq -r '.properties.outputs.applicationInsightsConnectionString.value' output.json)
 APPLICATION_INSIGHTS_NAME=$(jq -r '.properties.outputs.applicationInsightsName.value' output.json)
+POSTGRES_SERVER_FQDN=$(jq -r '.properties.outputs.postgresServerFqdn.value' output.json)
+POSTGRES_SERVER_USERNAME=$(jq -r '.properties.outputs.postgresServerUsername.value' output.json)
 
 if [ -z "$PROJECTS_ENDPOINT" ] || [ "$PROJECTS_ENDPOINT" = "null" ]; then
   echo "Error: projectsEndpoint not found. Possible deployment failure."
@@ -62,6 +65,8 @@ mkdir -p "$(dirname "$ENV_FILE_PATH")"
   echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
+  echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
+  echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
 } > "$ENV_FILE_PATH"
 
 # Create fresh root .env file (always overwrite)
@@ -72,6 +77,8 @@ ROOT_ENV_FILE_PATH="../.env"
   echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
+  echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
+  echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
 } > "$ROOT_ENV_FILE_PATH"
 
 CSHARP_PROJECT_PATH="../src/csharp/workshop/AgentWorkshop.Client/AgentWorkshop.Client.csproj"
@@ -120,4 +127,6 @@ echo "  Resource Group: $RESOURCE_GROUP_NAME"
 echo "  AI Project: $AI_PROJECT_NAME"
 echo "  Foundry Resource: $AI_FOUNDRY_NAME"
 echo "  Application Insights: $APPLICATION_INSIGHTS_NAME"
+echo "  PostgreSQL Server: $POSTGRES_SERVER_FQDN"
+echo "  PostgreSQL Username: $POSTGRES_SERVER_USERNAME"
 echo ""
