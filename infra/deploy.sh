@@ -6,7 +6,7 @@ echo "Deploying the Azure resources..."
 RG_LOCATION="westus"
 AI_PROJECT_FRIENDLY_NAME="Zava Agent Service Workshop"
 RESOURCE_PREFIX="zava-agent-wks"
-UNIQUE_SUFFIX=$(openssl rand -hex 2 | tr '[:upper:]' '[:lower:]') #
+UNIQUE_SUFFIX=$(openssl rand -hex 2 | tr '[:upper:]' '[:lower:]')
 
 # Deploy the Azure resources and save output to JSON
 echo -e "\033[1;37;41m Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX \033[0m"
