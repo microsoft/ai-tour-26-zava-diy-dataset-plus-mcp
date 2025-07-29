@@ -2,7 +2,7 @@
 Customer Sales Database Generator for Microsoft SQL Server
 
 This script generates a comprehensive customer sales database with optimized indexing
-for Microsoft SQL Server.
+and product embeddings support for Microsoft SQL Server.
 
 DATA FILE STRUCTURE:
 - product_data.json: Contains all product information (main_categories with products)
@@ -15,15 +15,19 @@ SQL SERVER CONNECTION:
 
 FEATURES:
 - Complete database generation with customers, products, stores, orders
+- Product image embeddings population from product_data.json
+- Product description embeddings population from product_data.json
 - Performance-optimized indexes
 - Row Level Security (RLS) with security policies
 - Comprehensive statistics and verification
-- Note: Vector embeddings require SQL Server 2022+ with vector support
+- Note: Vector embeddings use VARBINARY format (SQL Server 2022+ VECTOR support available)
 
 USAGE:
-    python generate_zava_sql_server.py                   # Generate complete database
-    python generate_zava_sql_server.py --show-stats      # Show database statistics
-    python generate_zava_sql_server.py --help            # Show all options
+    python generate_zava_sql_server.py                     # Generate complete database
+    python generate_zava_sql_server.py --show-stats        # Show database statistics
+    python generate_zava_sql_server.py --embeddings-only   # Populate embeddings only
+    python generate_zava_sql_server.py --verify-embeddings # Verify embeddings tables
+    python generate_zava_sql_server.py --help              # Show all options
 """
 
 import argparse
@@ -850,7 +854,6 @@ def insert_product_embedding(
         
         # Convert the embedding list to a binary format for SQL Server
         # Note: SQL Server 2022+ supports VECTOR type, for earlier versions use VARBINARY
-        import pickle
         embedding_bytes = pickle.dumps(image_embedding)
         
         cursor.execute(f"""
@@ -1006,7 +1009,6 @@ def insert_product_description_embedding(
     try:
         cursor = conn.cursor()
         # Convert the embedding list to binary format for SQL Server
-        import pickle
         embedding_bytes = pickle.dumps(description_embedding)
         
         cursor.execute(f"""
@@ -1801,6 +1803,26 @@ def generate_sql_server_database(num_customers: int = 50000):
             logging.info("=" * 50)
             insert_orders(conn, num_customers)
             
+            # Populate product embeddings
+            logging.info("\n" + "=" * 50)
+            logging.info("POPULATING PRODUCT EMBEDDINGS")
+            logging.info("=" * 50)
+            
+            # Populate image embeddings
+            logging.info("Populating product image embeddings...")
+            populate_product_image_embeddings(conn, clear_existing=True)
+            
+            # Populate description embeddings
+            logging.info("Populating product description embeddings...")
+            populate_product_description_embeddings(conn, clear_existing=True)
+            
+            # Verify embeddings
+            logging.info("Verifying image embeddings...")
+            verify_embeddings_table(conn)
+            
+            logging.info("Verifying description embeddings...")
+            verify_description_embeddings_table(conn)
+            
             # Verify the database was created and has data
             logging.info("\n" + "=" * 50)
             logging.info("FINAL DATABASE VERIFICATION")
@@ -1836,7 +1858,7 @@ def show_database_stats() -> None:
         
         # Get basic table counts
         tables = ['stores', 'customers', 'categories', 'product_types', 'products', 
-                 'inventory', 'orders', 'order_items']
+                 'inventory', 'orders', 'order_items', 'product_image_embeddings', 'product_description_embeddings']
         
         for table in tables:
             cursor.execute(f"SELECT COUNT(*) FROM {SCHEMA_NAME}.{table}")
@@ -1866,9 +1888,17 @@ def main():
     import argparse
     import sys
     
-    parser = argparse.ArgumentParser(description='Generate SQL Server database')
+    parser = argparse.ArgumentParser(description='Generate SQL Server database with product embeddings')
     parser.add_argument('--show-stats', action='store_true', 
                        help='Show database statistics instead of generating')
+    parser.add_argument('--embeddings-only', action='store_true',
+                       help='Only populate product embeddings (database must already exist)')
+    parser.add_argument('--verify-embeddings', action='store_true',
+                       help='Only verify embeddings tables and show sample data')
+    parser.add_argument('--clear-embeddings', action='store_true',
+                       help='Clear existing embeddings before populating (used with --embeddings-only)')
+    parser.add_argument('--batch-size', type=int, default=100,
+                       help='Batch size for processing embeddings (default: 100)')
     parser.add_argument('--num-customers', type=int, default=50000,
                        help='Number of customers to generate (default: 50000)')
     
@@ -1878,6 +1908,36 @@ def main():
         if args.show_stats:
             # Show database statistics
             show_database_stats()
+        elif args.verify_embeddings:
+            # Only verify embeddings tables
+            logging.info("Verifying embeddings tables...")
+            conn = create_connection()
+            try:
+                verify_embeddings_table(conn)
+                verify_description_embeddings_table(conn)
+            finally:
+                conn.close()
+        elif args.embeddings_only:
+            # Only populate embeddings
+            logging.info("Populating product embeddings only...")
+            conn = create_connection()
+            try:
+                # Populate image embeddings
+                logging.info("Populating product image embeddings...")
+                populate_product_image_embeddings(conn, clear_existing=args.clear_embeddings, batch_size=args.batch_size)
+                
+                # Populate description embeddings
+                logging.info("Populating product description embeddings...")
+                populate_product_description_embeddings(conn, clear_existing=args.clear_embeddings, batch_size=args.batch_size)
+                
+                # Verify embeddings
+                logging.info("Verifying embeddings...")
+                verify_embeddings_table(conn)
+                verify_description_embeddings_table(conn)
+                
+                logging.info("Embeddings population completed successfully!")
+            finally:
+                conn.close()
         else:
             # Generate the complete database
             logging.info(f"Database will be created at {SQL_SERVER_CONFIG['server']}")
@@ -1890,6 +1950,8 @@ def main():
             logging.info(f"Database: {SQL_SERVER_CONFIG['database']}")
             logging.info(f"Schema: {SCHEMA_NAME}")
             logging.info(f"To view statistics: python {sys.argv[0]} --show-stats")
+            logging.info(f"To populate embeddings only: python {sys.argv[0]} --embeddings-only")
+            logging.info(f"To verify embeddings: python {sys.argv[0]} --verify-embeddings")
             
     except Exception as e:
         logging.error(f"Failed to complete operation: {e}")
