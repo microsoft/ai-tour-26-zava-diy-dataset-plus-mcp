@@ -110,6 +110,28 @@ module foundryModelDeployments 'foundry-model-deployment.bicep' = [for (model, i
   }
 }]
 
+
+module postgresServer 'postgres.bicep' = {
+  name: 'postgresql'
+  scope: rg
+  params: {
+    name: '${resourcePrefix}-${uniqueSuffix}-postgresql'
+    location: location
+    tags: tags
+    sku: {
+      name: 'Standard_B1ms'
+      tier: 'Burstable'
+    }
+    storage: {
+      storageSizeGB: 32
+    }
+    version: '17'
+    authType: 'EntraOnly'
+    allowAzureIPsFirewall: true
+    allowAllIPsFirewall: true // Necessary for post-provision script, can be disabled after
+  }
+}
+
 // Outputs
 output subscriptionId string = subscription().subscriptionId
 output resourceGroupName string = rg.name
@@ -123,3 +145,5 @@ output deployedModels array = [for (model, index) in models: {
 output applicationInsightsName string = applicationInsights.outputs.applicationInsightsName
 output applicationInsightsConnectionString string = applicationInsights.outputs.connectionString
 output applicationInsightsInstrumentationKey string = applicationInsights.outputs.instrumentationKey
+output postgresServerFqdn string = postgresServer.outputs.domain
+output postgresServerUsername string = postgresServer.outputs.username
