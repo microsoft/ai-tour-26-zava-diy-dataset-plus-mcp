@@ -24,7 +24,7 @@ Here are a few examples from the organizational data:
 personas:
 - name: Kayo Miwa
   role: CEO
-  photo_name: kayo_miwa.png
+  photo_name: kayo-miwa.png
   department: leadership
 
 - name: Carlos Slattery
