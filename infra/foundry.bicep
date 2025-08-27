@@ -36,7 +36,7 @@ resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
       ipRules: []
     }
     publicNetworkAccess: 'Enabled'
-    disableLocalAuth: true
+    disableLocalAuth: false // Due to issue with PostgreSQL and azure_openai managed identity
     defaultProject: aiProjectName
     associatedProjects: [aiProjectName]
   }
@@ -45,3 +45,4 @@ resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
 
 output accountName string = account.name
 output endpoint string = account.properties.endpoints['AI Foundry API']
+output openaiEndpoint string = 'https://${account.name}.openai.azure.com'

@@ -7,6 +7,7 @@ RG_LOCATION="westus"
 AI_PROJECT_FRIENDLY_NAME="Zava Agent Service Workshop"
 RESOURCE_PREFIX="zava-agent-wks"
 UNIQUE_SUFFIX=$(openssl rand -hex 2 | tr '[:upper:]' '[:lower:]')
+UNIQUE_SUFFIX="d753"
 
 # Deploy the Azure resources and save output to JSON
 echo -e "\033[1;37;41m Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX \033[0m"
@@ -39,7 +40,7 @@ RESOURCE_GROUP_NAME=$(jq -r '.properties.outputs.resourceGroupName.value' output
 SUBSCRIPTION_ID=$(jq -r '.properties.outputs.subscriptionId.value' output.json)
 AI_FOUNDRY_NAME=$(jq -r '.properties.outputs.aiFoundryName.value' output.json)
 AI_PROJECT_NAME=$(jq -r '.properties.outputs.aiProjectName.value' output.json)
-AZURE_OPENAI_ENDPOINT=$(jq -r '.properties.outputs.projectsEndpoint.value' output.json | sed 's|api/projects/.*||')
+AZURE_OPENAI_ENDPOINT=$(jq -r '.properties.outputs.azureOpenAIEndpoint.value' output.json)
 APPLICATIONINSIGHTS_CONNECTION_STRING=$(jq -r '.properties.outputs.applicationInsightsConnectionString.value' output.json)
 APPLICATION_INSIGHTS_NAME=$(jq -r '.properties.outputs.applicationInsightsName.value' output.json)
 POSTGRES_SERVER_FQDN=$(jq -r '.properties.outputs.postgresServerFqdn.value' output.json)

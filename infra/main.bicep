@@ -132,12 +132,24 @@ module postgresServer 'postgres.bicep' = {
   }
 }
 
+// Grant PostgreSQL managed identity access to Azure OpenAI
+module postgresOpenAIRole 'role.bicep' = {
+  name: 'postgres-openai-role'
+  scope: rg
+  params: {
+    principalId: postgresServer.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services OpenAI User
+  }
+}
+
 // Outputs
 output subscriptionId string = subscription().subscriptionId
 output resourceGroupName string = rg.name
 output aiFoundryName string = foundry.outputs.accountName
 output aiProjectName string = foundryProject.outputs.aiProjectName
 output projectsEndpoint string = '${foundry.outputs.endpoint}api/projects/${foundryProject.outputs.aiProjectName}'
+output azureOpenAIEndpoint string = foundry.outputs.openaiEndpoint
 output deployedModels array = [for (model, index) in models: {
   name: model.name
   deploymentName: foundryModelDeployments[index].outputs.modelDeploymentName
