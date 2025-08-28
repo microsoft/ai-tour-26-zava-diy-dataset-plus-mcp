@@ -1,0 +1,125 @@
+personas:
+- name: Kayo Miwa
+  role: CEO
+  photo_name: kayo-miwa.png
+  department: leadership
+- name: Carlos Slattery
+  role: Chief Technical Officer
+  photo_name: carlos-slattery.png
+  department: technology
+- name: Kian Lambert
+  role: App Dev Manager
+  photo_name: kian-lambert.png
+  department: technology
+- name: Elvia Atkins
+  role: App Developer
+  photo_name: elvia-atkins.png
+  department: technology
+- name: Sarah Perez
+  role: App Developer
+  photo_name: sarah-perez.png
+  department: technology
+- name: Kadji Bell
+  role: Chief Information Security Officer
+  photo_name: kadji-bell.png
+  department: security
+- name: Isaac Fielder
+  role: Security Operations
+  photo_name: isaac-fielder.png
+  department: security
+- name: Aadi Kapoor
+  role: Data Sec Architect
+  photo_name: aadi-kapoor.png
+  department: security
+- name: Cassandra Dunn
+  role: Compliance Manager
+  photo_name: cassandra-dunn.png
+  department: security
+- name: Andre Lawson
+  role: Chief Finance Officer
+  photo_name: andre-lawson.png
+  department: financial
+- name: Charlotte Maraqe
+  role: VP of Procurement
+  photo_name: charlotte-maraqe.png
+  department: financial
+- name: Kevin Sturis
+  role: AP Specialist
+  photo_name: kevin-sturis.png
+  department: financial
+- name: Babak Shammas
+  role: Financial Reconciliation Lead
+  photo_name: babak-shammas.png
+  department: financial
+- name: Katri Ahoikas
+  role: Financial Reconciliation
+  photo_name: katri-ahoikas.png
+  department: financial
+- name: Carola Poland
+  role: Chief Product Officer
+  photo_name: carola-poland.png
+  department: product_dev
+- name: Mauricio August
+  role: Product Dev Lead
+  photo_name: mauricio-august.png
+  department: product_dev
+- name: Miguel Garcia
+  role: Product Manager
+  photo_name: miguel-garcia.png
+  department: product_dev
+- name: Krystal McKinney
+  role: R&D Lead
+  photo_name: krystal-mckinney.png
+  department: product_dev
+- name: Laurence Gilbertson
+  role: R&D Manager
+  photo_name: laurence-gilbertson.png
+  department: product_dev
+- name: Cecil Folk
+  role: Chief Marketing Officer
+  photo_name: cecil-folk.png
+  department: marketing
+- name: Tim de Boer
+  role: Marketing Manager
+  photo_name: tim-de-boer.png
+  department: marketing
+- name: Serena Ribeiro
+  role: Market Research Analyst
+  photo_name: serena-ribeiro.png
+  department: marketing
+- name: Daisy Phillips
+  role: Contact Center Lead
+  photo_name: daisy-phillips.png
+  department: contact_center
+- name: Daniela Mardero
+  role: Contact Center Rep
+  photo_name: daniela-mardero.png
+  department: contact_center
+- name: Daniella Booker
+  role: Sales Enablement Lead
+  photo_name: daniella-booker.png
+  department: sales_enablement
+- name: Karin Blair
+  role: Factory Supervisor
+  photo_name: karin-blair.png
+  department: factory_ops
+- name: Kat Larssen
+  role: Factory Distribution Mgr
+  photo_name: kat-larssen.png
+  department: factory_ops
+- name: Colin Ballinger
+  role: Field Services Lead
+  photo_name: colin-ballinger.png
+  department: factory_ops
+- name: Amanda Brady
+  role: Chief Information Officer
+  photo_name: amanda-brady.png
+  department: executive
+- name: Beth Davies
+  role: Chief Data Officer
+  photo_name: beth-davies.png
+  department: executive
+- name: Henry Brill
+  role: Chief Commercial Officer
+  photo_name: henry-brill.png
+  department: executive
