@@ -1,4 +1,4 @@
--- @pgsql Chat Query Editor (zava-agent-wks-d753-postgresql.postgres.database.azure.com)
+-- @pgsql Chat Query Editor 
 -- Vector Similarity Search Query
 -- 
 -- Description: Search for products using vector similarity with pgvector

@@ -18,12 +18,12 @@ AZURE_OPENAI_KEY = os.environ.get("AZURE_OPENAI_KEY")
 EMBEDDING_MODEL_DEPLOYMENT = os.environ.get("EMBEDDING_MODEL_DEPLOYMENT_NAME")
 
 # Azure ML Cohere Reranker configuration
-AZURE_ML_RANKING_ENDPOINT = os.environ.get("AZURE_ML_SERVERLESS_RANKING_ENDPOINT")
-AZURE_ML_RANKING_KEY = os.environ.get("AZURE_ML_SERVERLESS_RANKING_ENDPOINT_KEY")
+AZURE_ML_RANKING_ENDPOINT = os.environ.get("COHERE_RERANK_ENDPOINT_URI") + "/v2/rerank"
+AZURE_ML_RANKING_KEY = os.environ.get("COHERE_RERANK_ENDPOINT_KEY")
 
 # Environment variable examples:
-# AZURE_ML_SERVERLESS_RANKING_ENDPOINT=https://<deployment-name>.<region>.models.ai.azure.com/v1/rerank
-# AZURE_ML_SERVERLESS_RANKING_ENDPOINT_KEY=<your-api-key>
+# COHERE_RERANK_ENDPOINT_URI=https://<deployment-name>.<region>.models.ai.azure.com
+# COHERE_RERANK_ENDPOINT_KEY=<your-api-key>
 
 # Determine authentication method
 USE_MANAGED_IDENTITY = not AZURE_OPENAI_KEY  # Use managed identity if no key is provided
@@ -112,8 +112,7 @@ try:
         cur.execute("SELECT azure_ai.set_setting('azure_ml.serverless_ranking_endpoint', %s)", (AZURE_ML_RANKING_ENDPOINT,))
         print(f"✓ Set Azure ML ranking endpoint to: {AZURE_ML_RANKING_ENDPOINT}")
     else:
-        print("\n2b. Azure ML Cohere Reranker configuration skipped (AZURE_ML_SERVERLESS_RANKING_ENDPOINT not provided)")
-        print("   Note: To use azure_ai.rank() with Cohere reranker, set AZURE_ML_SERVERLESS_RANKING_ENDPOINT environment variable")
+        print("\n2b. Azure ML Cohere Reranker configuration skipped (COHERE_RERANK_ENDPOINT_URI not provided)")
     
     # 3. Verify settings
     print("\n3. Verifying azure_ai configuration...")
@@ -264,8 +263,8 @@ try:
     else:
         print("⚠ Cohere Reranker: Not configured")
         print("  To enable azure_ai.rank(), set these environment variables:")
-        print("  - AZURE_ML_SERVERLESS_RANKING_ENDPOINT")
-        print("  - AZURE_ML_SERVERLESS_RANKING_ENDPOINT_KEY (or use managed identity)")
+        print("  - COHERE_RERANK_ENDPOINT_URI")
+        print("  - COHERE_RERANK_ENDPOINT_KEY (or use managed identity)")
     
     print("\nAvailable semantic operators:")
     print("  - azure_ai.generate() - Text generation using LLMs")

@@ -7,7 +7,6 @@ RG_LOCATION="westus"
 AI_PROJECT_FRIENDLY_NAME="Zava Agent Service Workshop"
 RESOURCE_PREFIX="zava-agent-wks"
 UNIQUE_SUFFIX=$(openssl rand -hex 2 | tr '[:upper:]' '[:lower:]')
-UNIQUE_SUFFIX="d753"
 
 # Deploy the Azure resources and save output to JSON
 echo -e "\033[1;37;41m Creating agent workshop resources in resource group: rg-$RESOURCE_PREFIX-$UNIQUE_SUFFIX \033[0m"
@@ -21,11 +20,10 @@ az deployment sub create \
   --parameters location="$RG_LOCATION" \
   --parameters resourcePrefix="$RESOURCE_PREFIX" \
   --parameters uniqueSuffix="$UNIQUE_SUFFIX" \
-  --output json > output.json
+  --output json > output.json 2> deploy.err
 
-# Check if deployment was successful
 if [ $? -ne 0 ]; then
-  echo "Deployment failed. Check output.json for details."
+  echo "❌ Deployment failed. Check deploy.err for details."
   exit 1
 fi
 
@@ -45,11 +43,17 @@ APPLICATIONINSIGHTS_CONNECTION_STRING=$(jq -r '.properties.outputs.applicationIn
 APPLICATION_INSIGHTS_NAME=$(jq -r '.properties.outputs.applicationInsightsName.value' output.json)
 POSTGRES_SERVER_FQDN=$(jq -r '.properties.outputs.postgresServerFqdn.value' output.json)
 POSTGRES_SERVER_USERNAME=$(jq -r '.properties.outputs.postgresServerUsername.value' output.json)
+COHERE_RERANK_ENDPOINT_URI=$(jq -r '.properties.outputs.cohereRerankEndpointUri.value // empty' output.json)
+COHERE_RERANK_ENDPOINT_NAME=$(jq -r '.properties.outputs.cohereRerankEndpointName.value // empty' output.json)
+COHERE_WORKSPACE_PROJECT_NAME=$(jq -r '.properties.outputs.cohereWorkspaceProjectName.value // empty' output.json)
+COHERE_RERANK_ENDPOINT_KEY=""
 
 if [ -z "$PROJECTS_ENDPOINT" ] || [ "$PROJECTS_ENDPOINT" = "null" ]; then
   echo "Error: projectsEndpoint not found. Possible deployment failure."
   exit 1
 fi
+
+AZURE_OPENAI_KEY=""
 
 ENV_FILE_PATH="../src/python/workshop/.env"
 
@@ -59,6 +63,27 @@ ENV_FILE_PATH="../src/python/workshop/.env"
 # Create workshop directory if it doesn't exist
 mkdir -p "$(dirname "$ENV_FILE_PATH")"
 
+# If a Cohere rerank endpoint was deployed, attempt to retrieve its primary key
+if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+  KEYS_RESPONSE=$(az rest \
+    --method post \
+    --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.MachineLearningServices/workspaces/${COHERE_WORKSPACE_PROJECT_NAME}/serverlessEndpoints/${COHERE_RERANK_ENDPOINT_NAME}/listKeys?api-version=2024-04-01-preview" 2>/dev/null || true)
+  if [ -n "$KEYS_RESPONSE" ]; then
+    COHERE_RERANK_ENDPOINT_KEY=$(echo "$KEYS_RESPONSE" | jq -r '.primaryKey // empty')
+  fi
+fi
+
+# Retrieve Azure OpenAI (Cognitive Services) account key (moved earlier so it's written to .env)
+if [ -n "$AI_FOUNDRY_NAME" ] && [ -n "$RESOURCE_GROUP_NAME" ]; then
+  OPENAI_KEYS_RESPONSE=$(az rest \
+    --method post \
+    --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AI_FOUNDRY_NAME}/listKeys?api-version=2025-04-01-preview" 2>/dev/null || true)
+  if [ -n "$OPENAI_KEYS_RESPONSE" ]; then
+    # Prefer primaryKey; fall back to secondaryKey if primary absent
+    AZURE_OPENAI_KEY=$(echo "$OPENAI_KEYS_RESPONSE" | jq -r '.key1 // .primaryKey // .key2 // .secondaryKey // empty')
+  fi
+fi
+
 # Write to the workshop .env file
 {
   echo "PROJECT_ENDPOINT=$PROJECTS_ENDPOINT"
@@ -67,6 +92,15 @@ mkdir -p "$(dirname "$ENV_FILE_PATH")"
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
   echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
+  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
+    if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
+      echo "COHERE_RERANK_ENDPOINT_KEY=\"$COHERE_RERANK_ENDPOINT_KEY\""
+    fi
+  fi
+  if [ -n "$AZURE_OPENAI_KEY" ]; then
+    echo "AZURE_OPENAI_KEY=\"$AZURE_OPENAI_KEY\""
+  fi
 } > "$ENV_FILE_PATH"
 
 # Create fresh root .env file (always overwrite)
@@ -79,6 +113,15 @@ ROOT_ENV_FILE_PATH="../.env"
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
   echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
+  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
+    if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
+      echo "COHERE_RERANK_ENDPOINT_KEY=\"$COHERE_RERANK_ENDPOINT_KEY\""
+    fi
+  fi
+  if [ -n "$AZURE_OPENAI_KEY" ]; then
+    echo "AZURE_OPENAI_KEY=\"$AZURE_OPENAI_KEY\""
+  fi
 } > "$ROOT_ENV_FILE_PATH"
 
 CSHARP_PROJECT_PATH="../src/csharp/workshop/AgentWorkshop.Client/AgentWorkshop.Client.csproj"
@@ -89,13 +132,12 @@ if [ -f "$CSHARP_PROJECT_PATH" ]; then
   dotnet user-secrets set "Azure:ModelName" "gpt-4o-mini" --project "$CSHARP_PROJECT_PATH"
 fi
 
-# Delete the output.json file
-rm -f output.json
+# (Keeping output.json for reference; delete manually if not needed)
 
 echo "Adding Azure AI Developer user role"
 
-# Set Variables
-subId=$(az account show --query id --output tsv)
+# Set Variables (reuse subscription ID from deployment outputs)
+subId="$SUBSCRIPTION_ID"
 objectId=$(az ad signed-in-user show --query id -o tsv)
 
 echo "Ensuring Azure AI Developer role assignment..."
@@ -129,4 +171,17 @@ echo "  Foundry Resource: $AI_FOUNDRY_NAME"
 echo "  Application Insights: $APPLICATION_INSIGHTS_NAME"
 echo "  PostgreSQL Server: $POSTGRES_SERVER_FQDN"
 echo "  PostgreSQL Username: $POSTGRES_SERVER_USERNAME"
+if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+  echo "  Cohere Rerank Endpoint: $COHERE_RERANK_ENDPOINT_URI"
+  if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
+    echo "  Cohere Rerank Endpoint Key: (stored in .env)"
+  else
+    echo "  Cohere Rerank Endpoint Key: (not retrieved)"
+  fi
+fi
+if [ -n "$AZURE_OPENAI_KEY" ]; then
+  echo "  Azure OpenAI Key: (stored in .env)"
+else
+  echo "  Azure OpenAI Key: (not retrieved)"
+fi
 echo ""
