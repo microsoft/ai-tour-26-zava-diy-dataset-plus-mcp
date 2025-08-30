@@ -39,8 +39,7 @@ register_vector(conn)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_product_embeddings_hnsw ON retail.product_description_embeddings USING hnsw (description_embedding vector_cosine_ops)")
 cur.execute("SET hnsw.iterative_scan = strict_order")
 
-# Search query
-search_query = "WonderBoard"  # Example query
+search_query = "25 foot garden hose"
 
 print(f"Vector search for: '{search_query}'\n")
 
