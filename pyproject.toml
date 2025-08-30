@@ -4,10 +4,8 @@ line-length = 120
 [tool.ruff]
 line-length = 120
 
-# Enable import sorting
-select = ["I"]
-
 [tool.ruff.lint]
+select = ["I"]
 extend-select = [
   "B",
   "C4",
@@ -19,8 +17,7 @@ extend-select = [
   "RUF",
   "PLE",
   "ANN",
-  "RUF",
-  "I"  # Add 'I' to extend-select to activate import sorting
+  "RUF"
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

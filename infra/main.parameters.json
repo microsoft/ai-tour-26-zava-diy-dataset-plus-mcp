@@ -28,6 +28,9 @@
           "capacity": 120
         }
       ]
+    },
+    "deployCohereRerank": {
+      "value": true
     }
   }
 }
