@@ -3,8 +3,7 @@ import sys
 
 import dotenv
 import psycopg2
-from azure.identity import AzureCliCredential, DefaultAzureCredential
-from dotenv import load_dotenv
+from azure.identity import DefaultAzureCredential
 
 dotenv.load_dotenv(override=True)
 
