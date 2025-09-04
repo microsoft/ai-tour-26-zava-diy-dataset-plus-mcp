@@ -324,5 +324,5 @@ EOSQL
     fi
 else
     echo "⚠️  No backup files found"
-    echo "📋 Database 'zava' created but no data restored. Check errors"
+    echo "📋 Database 'zava' created but no data restored. Check previous output for restoration errors."
 fi
