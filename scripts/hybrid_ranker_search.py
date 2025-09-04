@@ -1,10 +1,8 @@
 import os
-from pathlib import Path
 
 import dotenv
 import psycopg2
 from azure.identity import DefaultAzureCredential
-from dotenv import load_dotenv
 from pgvector.psycopg2 import register_vector
 
 dotenv.load_dotenv(override=True)

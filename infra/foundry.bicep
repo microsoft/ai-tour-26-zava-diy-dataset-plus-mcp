@@ -36,7 +36,10 @@ resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
       ipRules: []
     }
     publicNetworkAccess: 'Enabled'
-    disableLocalAuth: false // Due to issue with PostgreSQL and azure_openai managed identity
+    // Technically, azure_openai can be configured with managed identity,
+    // but this was not working for us in August 2025, so we are using key auth instead
+    // https://learn.microsoft.com/azure/postgresql/flexible-server/generative-ai-enable-managed-identity-azure-ai
+    disableLocalAuth: false
     defaultProject: aiProjectName
     associatedProjects: [aiProjectName]
   }
