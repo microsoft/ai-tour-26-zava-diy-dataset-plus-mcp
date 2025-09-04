@@ -37,11 +37,14 @@ var authProperties = authType == 'Password' ? {
   }
 }
 
-resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-01-01-preview' = {
   location: location
   tags: tags
   name: name
   sku: sku
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: union(authProperties, {
     version: version
     storage: storage
@@ -104,7 +107,7 @@ resource configurations 'Microsoft.DBforPostgreSQL/flexibleServers/configuration
   name: 'azure.extensions'
   parent: postgresServer
   properties: {
-    value: 'vector'
+    value: 'vector,azure_ai'
     source: 'user-override'
   }
   dependsOn: [
@@ -115,3 +118,4 @@ resource configurations 'Microsoft.DBforPostgreSQL/flexibleServers/configuration
 
 output domain string =  postgresServer.properties.fullyQualifiedDomainName
 output username string = authType == 'Password' ? administratorLogin : deployer().userPrincipalName
+output principalId string = postgresServer.identity.principalId

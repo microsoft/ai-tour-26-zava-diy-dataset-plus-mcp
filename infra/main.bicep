@@ -39,6 +39,9 @@ param models array = [
 @minLength(4)
 param uniqueSuffix string
 
+@description('Whether to deploy the Cohere Rerank v3.5 serverless endpoint (preview)')
+param deployCohereRerank bool = false
+
 var resourceGroupName = toLower('rg-${resourcePrefix}-${uniqueSuffix}')
 
 var defaultTags = {
@@ -111,6 +114,94 @@ module foundryModelDeployments 'foundry-model-deployment.bicep' = [for (model, i
 }]
 
 
+module storage 'br/public:avm/res/storage/storage-account:0.9.1' = {
+  name: 'storage'
+  scope: rg
+  params: {
+    name: toLower('aist${replace(resourcePrefix, '-', '')}${uniqueSuffix}')
+    location: location
+    tags: tags
+    kind: 'StorageV2'
+    skuName: 'Standard_LRS'
+    networkAcls: {
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
+    }
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
+    roleAssignments: [
+      {
+        principalId: deployer().objectId
+        principalType: 'User'
+        roleDefinitionIdOrName: 'Storage Blob Data Contributor'
+      }
+    ]
+    blobServices: {
+      containers: [
+        {
+          name: 'default'
+          publicAccess: 'None'
+        }
+      ]
+      cors: {
+        corsRules: [
+          {
+          allowedOrigins: [
+            'https://mlworkspace.azure.ai'
+            'https://ml.azure.com'
+            'https://*.ml.azure.com'
+            'https://ai.azure.com'
+            'https://*.ai.azure.com'
+            'https://mlworkspacecanary.azure.ai'
+            'https://mlworkspace.azureml-test.net'
+          ]
+          allowedMethods: [
+            'GET'
+            'HEAD'
+            'POST'
+            'PUT'
+            'DELETE'
+            'OPTIONS'
+            'PATCH'
+          ]
+          maxAgeInSeconds: 1800
+          exposedHeaders: [
+            '*'
+          ]
+          allowedHeaders: [
+            '*'
+          ]
+        }
+      ]
+    }
+  }
+  }
+}
+
+
+module hubBasedProject 'ai/ai-environment.bicep' = {
+  name: 'ai'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    hubName: toLower('aihub-${resourcePrefix}-${uniqueSuffix}')
+    projectName: toLower('aiproj-${resourcePrefix}-${uniqueSuffix}')
+    applicationInsightsId: applicationInsights.outputs.applicationInsightsId
+    storageAccountId: storage.outputs.resourceId
+  }
+}
+
+module cohereRerank 'cohere-rerank-serverless.bicep' = if (deployCohereRerank) {
+  name: 'cohere-rerank'
+  scope: rg
+  params: {
+    projectName: hubBasedProject.outputs.projectName
+    location: location
+    tags: rootTags
+  }
+}
+
 module postgresServer 'postgres.bicep' = {
   name: 'postgresql'
   scope: rg
@@ -132,12 +223,24 @@ module postgresServer 'postgres.bicep' = {
   }
 }
 
+// Grant PostgreSQL managed identity access to Azure OpenAI
+module postgresOpenAIRole 'role.bicep' = {
+  name: 'postgres-openai-role'
+  scope: rg
+  params: {
+    principalId: postgresServer.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd' // Cognitive Services OpenAI User
+  }
+}
+
 // Outputs
 output subscriptionId string = subscription().subscriptionId
 output resourceGroupName string = rg.name
 output aiFoundryName string = foundry.outputs.accountName
 output aiProjectName string = foundryProject.outputs.aiProjectName
 output projectsEndpoint string = '${foundry.outputs.endpoint}api/projects/${foundryProject.outputs.aiProjectName}'
+output azureOpenAIEndpoint string = foundry.outputs.openaiEndpoint
 output deployedModels array = [for (model, index) in models: {
   name: model.name
   deploymentName: foundryModelDeployments[index].outputs.modelDeploymentName
@@ -147,3 +250,6 @@ output applicationInsightsConnectionString string = applicationInsights.outputs.
 output applicationInsightsInstrumentationKey string = applicationInsights.outputs.instrumentationKey
 output postgresServerFqdn string = postgresServer.outputs.domain
 output postgresServerUsername string = postgresServer.outputs.username
+output cohereRerankEndpointUri string = deployCohereRerank ? cohereRerank!.outputs.endpointUri : ''
+output cohereRerankEndpointName string = deployCohereRerank ? cohereRerank!.outputs.endpointName : ''
+output cohereWorkspaceProjectName string = hubBasedProject.outputs.projectName

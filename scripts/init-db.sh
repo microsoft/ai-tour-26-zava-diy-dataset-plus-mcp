@@ -27,12 +27,17 @@ else
     export PGPASSWORD="${PGPASSWORD:-postgres}"
 fi
 
-# Create the zava database
-echo "📦 Creating 'zava' database..."
-psql -v ON_ERROR_STOP=1 --dbname "postgres" <<-EOSQL
-    CREATE DATABASE zava;
-    GRANT ALL PRIVILEGES ON DATABASE zava TO "$PGUSER";
-EOSQL
+# Create the zava database (idempotent)
+if psql -Atqc "SELECT 1 FROM pg_database WHERE datname='zava';" postgres | grep -q 1; then
+    echo "✅ Database 'zava' already exists, skipping creation"
+else
+    echo "📦 Creating 'zava' database..."
+    psql -v ON_ERROR_STOP=1 --dbname "postgres" -c "CREATE DATABASE zava;"
+fi
+
+# (Re)grant privileges (idempotent, harmless if already granted)
+echo "🔑 Granting privileges on 'zava' to '$PGUSER' (idempotent)..."
+psql -v ON_ERROR_STOP=1 --dbname "postgres" -c "GRANT ALL PRIVILEGES ON DATABASE zava TO \"$PGUSER\";"
 
 # Install pgvector extension in the zava database
 echo "🔧 Installing pgvector extension in 'zava' database..."
@@ -319,17 +324,5 @@ EOSQL
     fi
 else
     echo "⚠️  No backup files found"
-    echo "📋 Database 'zava' created but no data restored."
-    echo "💡 You can generate data using: /workspace/scripts/generate_fresh_data.sh"
+    echo "📋 Database 'zava' created but no data restored. Check previous output for restoration errors."
 fi
-
-echo "🎉 Zava PostgreSQL Database initialization completed!"
-echo "📊 Database: zava"
-echo "👤 Users: postgres (superuser), store_manager (RLS testing)"
-echo "🔌 Extensions: pgvector"
-echo ""
-echo "🔧 Troubleshooting scripts available:"
-echo "   📋 Test backup files: /workspace/scripts/test_backup_files.sh"
-echo "   🔄 Manual restore: /workspace/scripts/manual_restore_backup.sh"
-echo "   🆕 Generate data: /workspace/scripts/generate_fresh_data.sh"
-echo "   👤 Test store_manager: /workspace/scripts/test_store_manager.sh"

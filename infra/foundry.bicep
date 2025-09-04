@@ -36,7 +36,10 @@ resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
       ipRules: []
     }
     publicNetworkAccess: 'Enabled'
-    disableLocalAuth: true
+    // Technically, azure_openai can be configured with managed identity,
+    // but this was not working for us in August 2025, so we are using key auth instead
+    // https://learn.microsoft.com/azure/postgresql/flexible-server/generative-ai-enable-managed-identity-azure-ai
+    disableLocalAuth: false
     defaultProject: aiProjectName
     associatedProjects: [aiProjectName]
   }
@@ -45,3 +48,4 @@ resource account 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
 
 output accountName string = account.name
 output endpoint string = account.properties.endpoints['AI Foundry API']
+output openaiEndpoint string = 'https://${account.name}.openai.azure.com'

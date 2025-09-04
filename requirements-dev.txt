@@ -1,3 +1,7 @@
 
 -r src/python/requirements.txt
 # -r data/requirements.txt
+openai
+psycopg2
+numpy
+pgvector
