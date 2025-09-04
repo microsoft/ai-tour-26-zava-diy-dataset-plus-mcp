@@ -205,7 +205,7 @@ try:
     
     print(f"✓ Azure AI extension: Enabled")
     print(f"✓ Azure OpenAI: Configured with {('managed identity' if USE_MANAGED_IDENTITY else 'subscription key')}")
-    if COHERE_RERANK_ENDPOINT_KEY:
+    if COHERE_RERANK_ENDPOINT_URI:
         print(f"✓ Cohere Reranker: Configured with {('managed identity' if USE_RANKING_MANAGED_IDENTITY else 'subscription key')}")
     else:
         print("⚠ Cohere Reranker: Not configured")
