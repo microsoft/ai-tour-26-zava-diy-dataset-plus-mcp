@@ -16,7 +16,7 @@ POSTGRES_DATABASE = "zava"
 
 if POSTGRES_HOST.endswith(".database.azure.com"):
     print("Authenticating to Azure Database for PostgreSQL using Azure Identity...")
-    azure_credential = DefaultAzureCredential()
+    azure_credential = DefaultAzureCredential(exclude_managed_identity_credential=True)
     token = azure_credential.get_token("https://ossrdbms-aad.database.windows.net/.default")
     POSTGRES_PASSWORD = token.token
 else:
