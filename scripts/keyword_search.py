@@ -2,7 +2,7 @@ import os
 
 import dotenv
 import psycopg2
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, AzureCliCredential
 
 dotenv.load_dotenv(override=True)
 
@@ -11,7 +11,7 @@ POSTGRES_USERNAME = os.environ["POSTGRES_SERVER_USERNAME"]
 POSTGRES_DATABASE = "zava"
 
 if POSTGRES_HOST.endswith(".database.azure.com"):
-    azure_credential = DefaultAzureCredential()
+    azure_credential = DefaultAzureCredential(exclude_managed_identity_credential=True)
     token = azure_credential.get_token("https://ossrdbms-aad.database.windows.net/.default")
     POSTGRES_PASSWORD = token.token
 else:

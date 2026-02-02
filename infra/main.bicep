@@ -42,7 +42,7 @@ param uniqueSuffix string
 @description('Whether to deploy the Cohere Rerank v3.5 serverless endpoint (preview)')
 param deployCohereRerank bool = false
 
-var resourceGroupName = toLower('rg-${resourcePrefix}-${uniqueSuffix}')
+var resourceGroupName = 'adv_aitour26_zava'
 
 var defaultTags = {
   source: 'Azure AI Foundry Agents Service lab'
@@ -179,7 +179,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.9.1' = {
 }
 
 
-module hubBasedProject 'ai/ai-environment.bicep' = {
+module hubBasedProject 'ai/ai-environment.bicep' = if (deployCohereRerank) {
   name: 'ai'
   scope: rg
   params: {
@@ -252,4 +252,4 @@ output postgresServerFqdn string = postgresServer.outputs.domain
 output postgresServerUsername string = postgresServer.outputs.username
 output cohereRerankEndpointUri string = deployCohereRerank ? cohereRerank!.outputs.endpointUri : ''
 output cohereRerankEndpointName string = deployCohereRerank ? cohereRerank!.outputs.endpointName : ''
-output cohereWorkspaceProjectName string = hubBasedProject.outputs.projectName
+output cohereWorkspaceProjectName string = deployCohereRerank ? hubBasedProject!.outputs.projectName : ''

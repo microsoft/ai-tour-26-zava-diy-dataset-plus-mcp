@@ -3,7 +3,7 @@ import sys
 
 import dotenv
 import psycopg2
-from azure.identity import DefaultAzureCredential
+from azure.identity import AzureCliCredential
 
 dotenv.load_dotenv(override=True)
 
@@ -21,7 +21,8 @@ COHERE_RERANK_ENDPOINT_URI = os.environ.get("COHERE_RERANK_ENDPOINT_URI")
 COHERE_RERANK_ENDPOINT_KEY = os.environ.get("COHERE_RERANK_ENDPOINT_KEY")
 
 # Environment variable examples:
-# COHERE_RERANK_ENDPOINT_URI=https://<deployment-name>.<region>.models.ai.azure.com
+# For Azure AI Foundry: COHERE_RERANK_ENDPOINT_URI=https://<resource>.services.ai.azure.com/providers/cohere/v2/rerank
+# For Serverless API: COHERE_RERANK_ENDPOINT_URI=https://<deployment-name>.<region>.models.ai.azure.com
 # COHERE_RERANK_ENDPOINT_KEY=<your-api-key>
 
 # Determine authentication method
@@ -44,8 +45,8 @@ print(f"Authentication method: {'Managed Identity' if USE_MANAGED_IDENTITY else 
 print(f"Ranking authentication method: {'Managed Identity' if USE_RANKING_MANAGED_IDENTITY else 'Subscription Key'}")
 
 if POSTGRES_HOST.endswith(".database.azure.com"):
-    print("Authenticating to Azure Database for PostgreSQL using Azure Identity...")
-    azure_credential = DefaultAzureCredential()
+    print("Authenticating to Azure Database for PostgreSQL using Azure CLI...")
+    azure_credential = AzureCliCredential()
     token = azure_credential.get_token("https://ossrdbms-aad.database.windows.net/.default")
     POSTGRES_PASSWORD = token.token
 else:
@@ -108,7 +109,11 @@ try:
             print("✓ Set Azure ML ranking endpoint key")
         
         # Set Azure ML ranking endpoint (required for both auth methods)
-        full_api_endpoint = f"{COHERE_RERANK_ENDPOINT_URI}/v2/rerank"
+        # Handle both formats: full endpoint with /v2/rerank or base URL
+        if COHERE_RERANK_ENDPOINT_URI.endswith('/v2/rerank') or '/providers/cohere/v2/rerank' in COHERE_RERANK_ENDPOINT_URI:
+            full_api_endpoint = COHERE_RERANK_ENDPOINT_URI
+        else:
+            full_api_endpoint = f"{COHERE_RERANK_ENDPOINT_URI}/v2/rerank"
         cur.execute("SELECT azure_ai.set_setting('azure_ml.serverless_ranking_endpoint', %s)", (full_api_endpoint,))
         print(f"✓ Set Azure ML ranking endpoint to: {full_api_endpoint}")
     else:

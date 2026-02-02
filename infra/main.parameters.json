@@ -30,7 +30,7 @@
       ]
     },
     "deployCohereRerank": {
-      "value": true
+      "value": false
     }
   }
 }
