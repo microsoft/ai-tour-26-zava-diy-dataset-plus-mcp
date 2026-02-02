@@ -74,25 +74,37 @@ SEARCH_TYPES = {
         "name": "Keyword (Full-Text)",
         "icon": "📝",
         "description": "PostgreSQL ts_rank",
-        "color": "#17a2b8"
+        "color": "#17a2b8",
+        "score_name": "Relevance",
+        "score_range": "0.0 - 1.0",
+        "score_help": "Frecuencia de términos coincidentes. Mayor = más palabras encontradas."
     },
     "vector": {
         "name": "Vector (Semantic)",
         "icon": "🧠",
         "description": "pgvector cosine similarity",
-        "color": "#28a745"
+        "color": "#28a745",
+        "score_name": "Similarity",
+        "score_range": "0.0 - 1.0",
+        "score_help": "Similitud semántica. 1.0 = significado idéntico al query."
     },
     "hybrid_rrf": {
         "name": "Hybrid RRF",
         "icon": "🔀",
         "description": "Reciprocal Rank Fusion",
-        "color": "#6f42c1"
+        "color": "#6f42c1",
+        "score_name": "RRF Score",
+        "score_range": "0.0 - 0.033",
+        "score_help": "Formula: 1/(60+rank). Combina rankings de vector y keyword."
     },
     "hybrid_ranker": {
         "name": "Hybrid + Ranker",
         "icon": "🎯",
         "description": "RRF + Cohere Rerank v4",
-        "color": "#fd7e14"
+        "color": "#fd7e14",
+        "score_name": "Ranker Score",
+        "score_range": "0.0 - 1.0",
+        "score_help": "Relevancia según Cohere AI. 1.0 = máxima relevancia contextual."
     }
 }
 
@@ -105,6 +117,68 @@ def check_api_health():
         return data.get("status") == "healthy", data.get("database_connected", False)
     except Exception:
         return False, False
+
+
+def normalize_score(score: float, search_type: str) -> float:
+    """
+    Normalize scores to 0-1 range for fair comparison across search types.
+    
+    - Keyword (ts_rank): already 0-1, but typically low values (0.0-0.3)
+    - Vector (cosine similarity): 0-1
+    - Hybrid RRF: 0-0.0328 (max when rank=1 in both: 2/61)
+    - Hybrid + Ranker: uses ranker_score which is 0-1
+    """
+    if search_type == "keyword":
+        # ts_rank typically returns low values, normalize assuming max ~0.5
+        return min(score / 0.5, 1.0)
+    elif search_type == "vector":
+        return score  # Already 0-1
+    elif search_type == "hybrid_rrf":
+        # Max RRF score is 2/61 ≈ 0.0328 when rank=1 in both searches
+        return min(score / 0.0328, 1.0)
+    elif search_type == "hybrid_ranker":
+        return score  # Ranker score is already 0-1
+    return score
+
+
+def calculate_medals(search_results: dict, selected_types: list[str]) -> dict:
+    """
+    Calculate medal rankings based on normalized top-1 scores.
+    Returns dict mapping search_type to medal emoji (🥇, 🥈, 🥉, or empty).
+    """
+    scores = {}
+    
+    for type_id in selected_types:
+        if type_id in search_results:
+            results = search_results[type_id].get('results', [])
+            if results:
+                # Get the best score (top-1 result)
+                top_result = results[0]
+                # Use ranker_score for hybrid_ranker if available
+                if type_id == "hybrid_ranker" and top_result.get('ranker_score'):
+                    raw_score = top_result['ranker_score']
+                else:
+                    raw_score = top_result['score']
+                
+                normalized = normalize_score(raw_score, type_id)
+                scores[type_id] = normalized
+    
+    if not scores:
+        return {}
+    
+    # Sort by normalized score (descending)
+    sorted_types = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
+    medals = {}
+    medal_emojis = ["🥇", "🥈", "🥉"]
+    
+    for idx, (type_id, score) in enumerate(sorted_types):
+        if idx < len(medal_emojis) and score > 0:
+            medals[type_id] = medal_emojis[idx]
+        else:
+            medals[type_id] = ""
+    
+    return medals
 
 
 def perform_search(query: str, search_types: list[str], limit: int):
@@ -126,9 +200,13 @@ def perform_search(query: str, search_types: list[str], limit: int):
         return None
 
 
-def render_result_card(result: dict, rank: int, is_unique: bool = False):
+def render_result_card(result: dict, rank: int, type_info: dict, is_unique: bool = False):
     """Render a single search result as a card."""
     unique_class = "highlight-unique" if is_unique else ""
+    score_name = type_info.get('score_name', 'Score')
+    
+    # For hybrid_ranker, show ranker_score if available
+    score = result.get('ranker_score') if result.get('ranker_score') else result['score']
     
     st.markdown(f"""
     <div class="search-result-card {unique_class}">
@@ -137,7 +215,7 @@ def render_result_card(result: dict, rank: int, is_unique: bool = False):
             <div style="flex: 1;">
                 <div class="result-sku">{result['sku']}</div>
                 <div class="result-name">{result['product_name']}</div>
-                <div class="result-score">Score: {result['score']:.4f}</div>
+                <div class="result-score">{score_name}: {score:.4f}</div>
                 <div style="font-size: 13px; color: #555; margin-top: 4px;">
                     {result['product_description'][:150]}...
                 </div>
@@ -206,6 +284,26 @@ def main():
         
         st.divider()
         
+        # Score interpretation help
+        with st.expander("📊 Score Interpretation"):
+            st.markdown("""
+            **Keyword (ts_rank)**
+            - Rango: 0.0 - 1.0
+            - Mayor = más términos coinciden
+            
+            **Vector (Similarity)**
+            - Rango: 0.0 - 1.0  
+            - 1.0 = significado idéntico
+            
+            **Hybrid RRF**
+            - Rango: 0.0 - 0.033
+            - Combina rankings vector+keyword
+            
+            **Ranker Score**
+            - Rango: 0.0 - 1.0
+            - Cohere AI juzga relevancia
+            """)
+        
         # API URL configuration
         with st.expander("🔧 Advanced"):
             st.text_input(
@@ -267,6 +365,16 @@ def main():
             
             st.divider()
             
+            # Calculate medals based on normalized scores
+            medals = calculate_medals(results['search_results'], selected_types)
+            
+            # Show winner banner
+            if medals:
+                winner = [t for t, m in medals.items() if m == "🥇"]
+                if winner:
+                    winner_info = SEARCH_TYPES[winner[0]]
+                    st.success(f"🏆 **Mejor resultado**: {winner_info['icon']} **{winner_info['name']}** tiene el score normalizado más alto para esta búsqueda")
+            
             # Collect all product IDs per search type
             type_product_ids = {}
             for type_id in selected_types:
@@ -286,15 +394,22 @@ def main():
             for col_idx, type_id in enumerate(selected_types):
                 with cols[col_idx]:
                     type_info = SEARCH_TYPES[type_id]
+                    medal = medals.get(type_id, "")
                     
-                    # Header for this search type
+                    # Header for this search type with medal
+                    medal_html = f'<span style="font-size: 28px; position: absolute; top: -5px; right: 5px;">{medal}</span>' if medal else ''
+                    
                     st.markdown(f"""
-                    <div class="header-card" style="background: {type_info['color']};">
+                    <div class="header-card" style="background: {type_info['color']}; position: relative;">
+                        {medal_html}
                         <div style="font-size: 18px; font-weight: bold;">
                             {type_info['icon']} {type_info['name']}
                         </div>
                         <div style="font-size: 12px; opacity: 0.9;">
                             {type_info['description']}
+                        </div>
+                        <div style="font-size: 11px; opacity: 0.75; margin-top: 4px;">
+                            {type_info['score_name']}: {type_info['score_range']}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -312,7 +427,7 @@ def main():
                             for result in type_result['results']:
                                 # Check if this product is unique to this search type
                                 is_unique = result['product_id'] not in other_type_ids
-                                render_result_card(result, result['rank'], is_unique)
+                                render_result_card(result, result['rank'], type_info, is_unique)
                         else:
                             st.info("No results found")
                     else:
@@ -320,7 +435,11 @@ def main():
             
             # Legend
             st.divider()
-            st.caption("💡 **Yellow highlighted** results are unique to that search type and don't appear in other selected searches.")
+            st.markdown("""
+**Leyenda:**
+- 🥇🥈🥉 **Medallas**: Ranking basado en scores normalizados del resultado #1 (permite comparar entre tipos)
+- 💛 **Resaltado amarillo**: Resultados únicos de esa búsqueda que no aparecen en las otras
+            """)
     
     elif search_button and not query:
         st.warning("Please enter a search query.")

@@ -8,6 +8,11 @@ from ..config import EMBEDDING_MODEL_DEPLOYMENT, RRF_K
 from ..models import ProductResult
 
 
+def embedding_to_pgvector(embedding: list) -> str:
+    """Convert embedding list to pgvector string format."""
+    return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
 async def hybrid_rrf_search(query: str, pool: Pool, limit: int = 5) -> tuple[list[ProductResult], float]:
     """
     Perform hybrid search using Reciprocal Rank Fusion.
@@ -38,6 +43,8 @@ async def hybrid_rrf_search(query: str, pool: Pool, limit: int = 5) -> tuple[lis
             EMBEDDING_MODEL_DEPLOYMENT, query
         )
         embedding = embedding_row[0]
+        # Convert to pgvector string format
+        embedding_str = embedding_to_pgvector(embedding)
         
         # Hybrid RRF SQL query
         rrf_sql = """
@@ -90,7 +97,7 @@ async def hybrid_rrf_search(query: str, pool: Pool, limit: int = 5) -> tuple[lis
         LIMIT $4;
         """
         
-        rows = await conn.fetch(rrf_sql, embedding, tsquery, RRF_K, limit)
+        rows = await conn.fetch(rrf_sql, embedding_str, tsquery, RRF_K, limit)
     
     execution_time = (time.perf_counter() - start_time) * 1000
     

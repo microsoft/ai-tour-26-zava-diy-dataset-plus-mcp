@@ -15,6 +15,11 @@ from ..config import (
 from ..models import ProductResult
 
 
+def embedding_to_pgvector(embedding: list) -> str:
+    """Convert embedding list to pgvector string format."""
+    return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
 async def cohere_rerank(query: str, documents: list[dict], top_n: int = 10) -> list[dict]:
     """
     Call Cohere Rerank API via Azure AI Foundry.
@@ -92,6 +97,8 @@ async def hybrid_ranker_search(query: str, pool: Pool, limit: int = 5) -> tuple[
             EMBEDDING_MODEL_DEPLOYMENT, query
         )
         embedding = embedding_row[0]
+        # Convert to pgvector string format
+        embedding_str = embedding_to_pgvector(embedding)
         
         # RRF SQL query to get candidates for reranking
         rrf_sql = """
@@ -192,7 +199,7 @@ async def hybrid_ranker_search(query: str, pool: Pool, limit: int = 5) -> tuple[
         ORDER BY rrf_score DESC;
         """
         
-        rows = await conn.fetch(rrf_sql, embedding, tsquery, RRF_K)
+        rows = await conn.fetch(rrf_sql, embedding_str, tsquery, RRF_K)
     
     # Prepare documents for Cohere reranking
     documents = []

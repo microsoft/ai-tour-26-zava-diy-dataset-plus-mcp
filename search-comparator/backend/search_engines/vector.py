@@ -8,6 +8,11 @@ from ..config import EMBEDDING_MODEL_DEPLOYMENT
 from ..models import ProductResult
 
 
+def embedding_to_pgvector(embedding: list) -> str:
+    """Convert embedding list to pgvector string format."""
+    return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
 async def vector_search(query: str, pool: Pool, limit: int = 5) -> tuple[list[ProductResult], float]:
     """
     Perform vector search using pgvector cosine similarity.
@@ -32,6 +37,8 @@ async def vector_search(query: str, pool: Pool, limit: int = 5) -> tuple[list[Pr
             EMBEDDING_MODEL_DEPLOYMENT, query
         )
         embedding = embedding_row[0]
+        # Convert to pgvector string format
+        embedding_str = embedding_to_pgvector(embedding)
         
         # Vector search query
         sql = """
@@ -48,7 +55,7 @@ async def vector_search(query: str, pool: Pool, limit: int = 5) -> tuple[list[Pr
         LIMIT $2;
         """
         
-        rows = await conn.fetch(sql, embedding, limit)
+        rows = await conn.fetch(sql, embedding_str, limit)
     
     execution_time = (time.perf_counter() - start_time) * 1000
     

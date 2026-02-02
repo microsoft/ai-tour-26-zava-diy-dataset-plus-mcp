@@ -2,10 +2,13 @@
 FastAPI backend for Search Comparator.
 Provides endpoints to compare different search types.
 """
+from __future__ import annotations
+
 import asyncio
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Optional
 
 import asyncpg
 from dotenv import load_dotenv
@@ -30,7 +33,7 @@ from .search_engines import (
 load_dotenv(override=True)
 
 # Global connection pool
-db_pool: asyncpg.Pool | None = None
+db_pool: Optional[asyncpg.Pool] = None
 
 
 @asynccontextmanager
