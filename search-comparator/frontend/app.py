@@ -24,7 +24,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .search-result-card {
-        background-color: #f8f9fa;
+        background-color: #1e1e1e;
         border-radius: 8px;
         padding: 12px;
         margin-bottom: 10px;
@@ -33,37 +33,24 @@ st.markdown("""
     .result-rank {
         font-size: 24px;
         font-weight: bold;
-        color: #0066cc;
+        color: #4da6ff;
     }
     .result-sku {
         font-size: 12px;
-        color: #666;
+        color: #888;
     }
     .result-name {
         font-size: 16px;
         font-weight: 600;
-        color: #333;
+        color: #fff;
     }
     .result-score {
         font-size: 14px;
-        color: #28a745;
-    }
-    .metric-box {
-        background-color: #e9ecef;
-        border-radius: 6px;
-        padding: 8px;
-        text-align: center;
+        color: #4ade80;
     }
     .highlight-unique {
-        background-color: #fff3cd !important;
+        background-color: #3d3d00 !important;
         border-left-color: #ffc107 !important;
-    }
-    .header-card {
-        background: linear-gradient(135deg, #0066cc 0%, #004080 100%);
-        color: white;
-        padding: 10px 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -208,21 +195,12 @@ def render_result_card(result: dict, rank: int, type_info: dict, is_unique: bool
     # For hybrid_ranker, show ranker_score if available
     score = result.get('ranker_score') if result.get('ranker_score') else result['score']
     
-    st.markdown(f"""
-    <div class="search-result-card {unique_class}">
-        <div style="display: flex; align-items: flex-start; gap: 12px;">
-            <div class="result-rank">#{rank}</div>
-            <div style="flex: 1;">
-                <div class="result-sku">{result['sku']}</div>
-                <div class="result-name">{result['product_name']}</div>
-                <div class="result-score">{score_name}: {score:.4f}</div>
-                <div style="font-size: 13px; color: #555; margin-top: 4px;">
-                    {result['product_description'][:150]}...
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    unique_badge = '<span style="background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:8px;">ÚNICO</span>' if is_unique else ''
+    
+    desc = result['product_description'][:150] if len(result['product_description']) > 150 else result['product_description']
+    
+    card_html = f'<div class="search-result-card {unique_class}"><div style="display: flex; align-items: flex-start; gap: 12px;"><div class="result-rank">#{rank}</div><div style="flex: 1;"><div class="result-sku">{result["sku"]}</div><div class="result-name">{result["product_name"]}{unique_badge}</div><div class="result-score">{score_name}: {score:.4f}</div><div style="font-size: 13px; color: #888; margin-top: 4px;">{desc}...</div></div></div></div>'
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def get_product_ids(results: list) -> set:
@@ -396,23 +374,11 @@ def main():
                     type_info = SEARCH_TYPES[type_id]
                     medal = medals.get(type_id, "")
                     
-                    # Header for this search type with medal
-                    medal_html = f'<span style="font-size: 28px; position: absolute; top: -5px; right: 5px;">{medal}</span>' if medal else ''
+                    # Header card with medal - using components.html for consistent rendering
+                    medal_html = f'<span style="font-size: 32px; float: right;">{medal}</span>' if medal else ''
                     
-                    st.markdown(f"""
-                    <div class="header-card" style="background: {type_info['color']}; position: relative;">
-                        {medal_html}
-                        <div style="font-size: 18px; font-weight: bold;">
-                            {type_info['icon']} {type_info['name']}
-                        </div>
-                        <div style="font-size: 12px; opacity: 0.9;">
-                            {type_info['description']}
-                        </div>
-                        <div style="font-size: 11px; opacity: 0.75; margin-top: 4px;">
-                            {type_info['score_name']}: {type_info['score_range']}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    header_html = f'''<div style="background: linear-gradient(135deg, {type_info['color']} 0%, {type_info['color']}dd 100%); color: white; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; font-family: system-ui, -apple-system, sans-serif;">{medal_html}<div style="font-size: 20px; font-weight: bold;">{type_info['icon']} {type_info['name']}</div><div style="font-size: 12px; opacity: 0.9;">{type_info['description']}</div><div style="font-size: 11px; opacity: 0.75; margin-top: 4px;">{type_info['score_name']}: {type_info['score_range']}</div></div>'''
+                    st.markdown(header_html, unsafe_allow_html=True)
                     
                     if type_id in results['search_results']:
                         type_result = results['search_results'][type_id]
