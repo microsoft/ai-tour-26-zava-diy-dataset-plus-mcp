@@ -15,8 +15,9 @@ POSTGRES_DATABASE = "zava"
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.environ.get("AZURE_OPENAI_KEY")
 EMBEDDING_MODEL_DEPLOYMENT = os.environ.get("EMBEDDING_MODEL_DEPLOYMENT_NAME")
+RERANK_MODEL_DEPLOYMENT = os.environ.get("RERANK_MODEL_DEPLOYMENT_NAME", "Cohere-rerank-v4.0-pro")
 
-# Azure ML Cohere Reranker configuration
+# Endpoint configuration required by azure_ai.rank cross-encoder flow
 COHERE_RERANK_ENDPOINT_URI = os.environ.get("COHERE_RERANK_ENDPOINT_URI")
 COHERE_RERANK_ENDPOINT_KEY = os.environ.get("COHERE_RERANK_ENDPOINT_KEY")
 
@@ -34,6 +35,10 @@ if not AZURE_OPENAI_ENDPOINT:
 
 if not EMBEDDING_MODEL_DEPLOYMENT:
     print("Error: EMBEDDING_MODEL_DEPLOYMENT_NAME environment variable is required")
+    sys.exit(1)
+
+if not RERANK_MODEL_DEPLOYMENT:
+    print("Error: RERANK_MODEL_DEPLOYMENT_NAME environment variable is required")
     sys.exit(1)
 
 if not USE_MANAGED_IDENTITY and not AZURE_OPENAI_KEY:
@@ -94,7 +99,7 @@ try:
     cur.execute("SELECT azure_ai.set_setting('azure_openai.endpoint', %s)", (AZURE_OPENAI_ENDPOINT,))
     print(f"✓ Set Azure OpenAI endpoint to: {AZURE_OPENAI_ENDPOINT}")
     
-    # 2b. Configure Azure ML Cohere Reranker (if available)
+    # 2b. Configure Azure ML Cohere Reranker endpoint (required by azure_ai.rank)
     if COHERE_RERANK_ENDPOINT_URI:
         print(f"\n2b. Configuring Azure ML Cohere Reranker with {('managed identity' if USE_RANKING_MANAGED_IDENTITY else 'subscription key')}...")
         
@@ -112,7 +117,9 @@ try:
         cur.execute("SELECT azure_ai.set_setting('azure_ml.serverless_ranking_endpoint', %s)", (full_api_endpoint,))
         print(f"✓ Set Azure ML ranking endpoint to: {full_api_endpoint}")
     else:
-        print("\n2b. Azure ML Cohere Reranker configuration skipped (COHERE_RERANK_ENDPOINT_URI not provided)")
+        print("\n2b. Azure ML endpoint configuration skipped (COHERE_RERANK_ENDPOINT_URI not provided)")
+        print("   NOTE: azure_ai.rank requires azure_ml.serverless_ranking_endpoint to be configured.")
+        print("   Set COHERE_RERANK_ENDPOINT_URI to your Cohere rerank endpoint host (without /v2/rerank).")
     
     # 3. Verify settings
     print("\n3. Verifying azure_ai configuration...")
@@ -144,6 +151,9 @@ try:
                 
         except Exception as e:
             print(f"⚠ Warning: Could not verify ranking configuration: {e}")
+    else:
+        print(f"⚠ Reranker model deployment selected: {RERANK_MODEL_DEPLOYMENT}")
+        print("⚠ Ranking endpoint is not configured; rank calls may fail until COHERE_RERANK_ENDPOINT_URI is set.")
     
     # 4. Test the configuration with a simple embedding call
     print("\n4. Testing Azure OpenAI integration...")
@@ -169,35 +179,35 @@ try:
     except Exception as e:
         print(f"✗ Unexpected error during testing: {e}")
     
-    # 4b. Test Cohere reranker if configured
-    if COHERE_RERANK_ENDPOINT_URI:
-        print("\n4b. Testing Azure ML Cohere Reranker integration...")
+    # 4b. Test Cohere reranker
+    print("\n4b. Testing Cohere Reranker integration...")
+    
+    try:
+        test_query = "Best headphones for travel"
+        test_documents = [
+            "The headphones are lightweight and foldable, making them easy to carry.",
+            "Bad battery life, not so great for long trips.",
+            "The sound quality is excellent, with good noise isolation."
+        ]
         
-        try:
-            test_query = "Best headphones for travel"
-            test_documents = [
-                "The headphones are lightweight and foldable, making them easy to carry.",
-                "Bad battery life, not so great for long trips.",
-                "The sound quality is excellent, with good noise isolation."
-            ]
+        print(f"  Testing azure_ai.rank() with model deployment: {RERANK_MODEL_DEPLOYMENT}")
+        cur.execute(
+            "SELECT * FROM azure_ai.rank(query => %s, document_contents => %s, model => %s)",
+            (test_query, test_documents, RERANK_MODEL_DEPLOYMENT),
+        )
+        results = cur.fetchall()
+        
+        if results:
+            print(f"✓ Successfully ranked {len(results)} documents!")
+        else:
+            print("⚠ Warning: Ranking returned empty result")
             
-            print(f"  Testing azure_ai.rank() with query: '{test_query}'")
-            cur.execute("SELECT * FROM azure_ai.rank(%s, %s)", (test_query, test_documents))
-            results = cur.fetchall()
-            
-            if results:
-                print(f"✓ Successfully ranked {len(results)} documents!")
-            else:
-                print("⚠ Warning: Ranking returned empty result")
-                
-        except psycopg2.Error as e:
-            print(f"✗ Error testing Azure ML Cohere Reranker: {e}")
-            print("  Note: Make sure the Cohere rerank model is deployed and accessible")
-            
-        except Exception as e:
-            print(f"✗ Unexpected error during reranker testing: {e}")
-    else:
-        print("\n4b. Cohere reranker testing skipped (endpoint not configured)")
+    except psycopg2.Error as e:
+        print(f"✗ Error testing Cohere Reranker: {e}")
+        print("  Note: Make sure the reranker model deployment exists in Foundry")
+        
+    except Exception as e:
+        print(f"✗ Unexpected error during reranker testing: {e}")
     
     print("\n" + "="*60)
     print("CONFIGURATION SUMMARY")
@@ -205,10 +215,7 @@ try:
     
     print(f"✓ Azure AI extension: Enabled")
     print(f"✓ Azure OpenAI: Configured with {('managed identity' if USE_MANAGED_IDENTITY else 'subscription key')}")
-    if COHERE_RERANK_ENDPOINT_URI:
-        print(f"✓ Cohere Reranker: Configured with {('managed identity' if USE_RANKING_MANAGED_IDENTITY else 'subscription key')}")
-    else:
-        print("⚠ Cohere Reranker: Not configured")
+    print(f"✓ Cohere Reranker: Using deployment '{RERANK_MODEL_DEPLOYMENT}'")
 except psycopg2.Error as e:
     print(f"Error connecting to PostgreSQL: {e}")
     sys.exit(1)

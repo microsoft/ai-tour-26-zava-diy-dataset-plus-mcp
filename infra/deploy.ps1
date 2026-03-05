@@ -48,13 +48,9 @@ $applicationInsightsConnectionString = $outputs.applicationInsightsConnectionStr
 $applicationInsightsName = $outputs.applicationInsightsName.value
 $postgresServerFqdn = $outputs.postgresServerFqdn.value
 $postgresServerUsername = $outputs.postgresServerUsername.value
-$cohereRerankEndpointUri = $outputs.cohereRerankEndpointUri.value
-$cohereRerankEndpointName = $outputs.cohereRerankEndpointName.value
-# Updated output name (bash script: cohereWorkspaceProjectName)
-$cohereWorkspaceProjectName = $outputs.cohereWorkspaceProjectName.value
 
-$cohereRerankEndpointKey = $null
 $azureOpenAIKey = $null
+$rerankModelDeploymentName = "Cohere-rerank-v4.0-pro"
 
 if ([string]::IsNullOrEmpty($projectsEndpoint)) {
     Write-Host "Error: projectsEndpoint not found. Possible deployment failure."
@@ -80,35 +76,11 @@ if (Test-Path $ENV_FILE_PATH) {
 PROJECT_ENDPOINT=$projectsEndpoint
 GPT_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
 EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
+RERANK_MODEL_DEPLOYMENT_NAME="$rerankModelDeploymentName"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
 POSTGRES_SERVER_FQDN="$postgresServerFqdn"
 POSTGRES_SERVER_USERNAME="$postgresServerUsername"
 "@ | Set-Content -Path $ENV_FILE_PATH
-
-# If a Cohere rerank endpoint was deployed, attempt to retrieve its primary key
-if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointUri)) {
-    $workspaceName = $cohereWorkspaceProjectName
-    # Use provided endpoint name output or derive from URI if absent
-    if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointName)) {
-        $serverlessEndpointName = $cohereRerankEndpointName
-    } elseif ($cohereRerankEndpointUri -match 'https?://([^/]+)') {
-        $endpointHost = $Matches[1]
-        $serverlessEndpointName = $endpointHost.Split('.')[0]
-    }
-    try {
-        $subId = $subscriptionId
-        if ($subId -and $serverlessEndpointName -and $workspaceName) {
-            $keysJson = az rest --method post --url "https://management.azure.com/subscriptions/$subId/resourceGroups/$resourceGroupName/providers/Microsoft.MachineLearningServices/workspaces/$workspaceName/serverlessEndpoints/$serverlessEndpointName/listKeys?api-version=2024-04-01-preview" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $keysJson) {
-                $keysObj = $keysJson | ConvertFrom-Json
-                $cohereRerankEndpointKey = $keysObj.primaryKey
-            }
-        }
-    }
-    catch {
-        Write-Host "Warning: Failed to retrieve Cohere rerank endpoint key: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-}
 
 # Retrieve Azure OpenAI (Cognitive Services) account key (listKeys)
 if (-not [string]::IsNullOrWhiteSpace($aiFoundryName) -and -not [string]::IsNullOrWhiteSpace($resourceGroupName)) {
@@ -135,24 +107,11 @@ AZURE_OPENAI_ENDPOINT="$azureOpenAIEndpoint"
 PROJECT_ENDPOINT="$projectsEndpoint"
 GPT_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
 EMBEDDING_MODEL_DEPLOYMENT_NAME="text-embedding-3-small"
+RERANK_MODEL_DEPLOYMENT_NAME="$rerankModelDeploymentName"
 APPLICATIONINSIGHTS_CONNECTION_STRING="$applicationInsightsConnectionString"
 POSTGRES_SERVER_FQDN="$postgresServerFqdn"
 POSTGRES_SERVER_USERNAME="$postgresServerUsername"
 "@ | Set-Content -Path $ROOT_ENV_FILE_PATH
-
-# Append Cohere rerank endpoint details (only if deployed) to both env files
-if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointUri)) {
-    Add-Content -Path $ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_URI=\"$cohereRerankEndpointUri\"" 
-    Add-Content -Path $ROOT_ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_URI=\"$cohereRerankEndpointUri\"" 
-    if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointName)) {
-        Add-Content -Path $ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_NAME=\"$cohereRerankEndpointName\""
-        Add-Content -Path $ROOT_ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_NAME=\"$cohereRerankEndpointName\""
-    }
-    if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointKey)) {
-        Add-Content -Path $ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_KEY=\"$cohereRerankEndpointKey\""
-        Add-Content -Path $ROOT_ENV_FILE_PATH -Value "COHERE_RERANK_ENDPOINT_KEY=\"$cohereRerankEndpointKey\""
-    }
-}
 
 if (-not [string]::IsNullOrWhiteSpace($azureOpenAIKey)) {
     Add-Content -Path $ENV_FILE_PATH -Value "AZURE_OPENAI_KEY=\"$azureOpenAIKey\""
@@ -223,15 +182,7 @@ Write-Host "  Foundry Resource: $aiFoundryName"
 Write-Host "  Application Insights: $applicationInsightsName"
 Write-Host "  PostgreSQL Server: $postgresServerFqdn"
 Write-Host "  PostgreSQL Username: $postgresServerUsername"
-if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointUri)) {
-    Write-Host "  Cohere Rerank Endpoint: $cohereRerankEndpointUri"
-    if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointName)) { Write-Host "  Cohere Rerank Endpoint Name: $cohereRerankEndpointName" }
-    if (-not [string]::IsNullOrWhiteSpace($cohereRerankEndpointKey)) {
-        Write-Host "  Cohere Rerank Endpoint Key: (stored in .env)"
-    } else {
-        Write-Host "  Cohere Rerank Endpoint Key: (not retrieved)"
-    }
-}
+Write-Host "  Reranker Deployment: $rerankModelDeploymentName"
 if (-not [string]::IsNullOrWhiteSpace($azureOpenAIKey)) {
     Write-Host "  Azure OpenAI Key: (stored in .env)"
 } else {

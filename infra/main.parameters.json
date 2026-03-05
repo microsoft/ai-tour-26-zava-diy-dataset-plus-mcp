@@ -23,14 +23,15 @@
         {
           "name": "text-embedding-3-small",
           "format": "OpenAI",
+        },
+        {
+          "name": "Cohere-rerank-v4.0-pro",
+          "format": "Cohere",
           "version": "1",
           "skuName": "GlobalStandard",
-          "capacity": 120
+          "capacity": 20
         }
       ]
-    },
-    "deployCohereRerank": {
-      "value": true
     }
   }
 }

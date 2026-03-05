@@ -43,10 +43,6 @@ APPLICATIONINSIGHTS_CONNECTION_STRING=$(jq -r '.properties.outputs.applicationIn
 APPLICATION_INSIGHTS_NAME=$(jq -r '.properties.outputs.applicationInsightsName.value' output.json)
 POSTGRES_SERVER_FQDN=$(jq -r '.properties.outputs.postgresServerFqdn.value' output.json)
 POSTGRES_SERVER_USERNAME=$(jq -r '.properties.outputs.postgresServerUsername.value' output.json)
-COHERE_RERANK_ENDPOINT_URI=$(jq -r '.properties.outputs.cohereRerankEndpointUri.value // empty' output.json)
-COHERE_RERANK_ENDPOINT_NAME=$(jq -r '.properties.outputs.cohereRerankEndpointName.value // empty' output.json)
-COHERE_WORKSPACE_PROJECT_NAME=$(jq -r '.properties.outputs.cohereWorkspaceProjectName.value // empty' output.json)
-COHERE_RERANK_ENDPOINT_KEY=""
 
 if [ -z "$PROJECTS_ENDPOINT" ] || [ "$PROJECTS_ENDPOINT" = "null" ]; then
   echo "Error: projectsEndpoint not found. Possible deployment failure."
@@ -54,6 +50,20 @@ if [ -z "$PROJECTS_ENDPOINT" ] || [ "$PROJECTS_ENDPOINT" = "null" ]; then
 fi
 
 AZURE_OPENAI_KEY=""
+RERANK_MODEL_DEPLOYMENT_NAME="Cohere-rerank-v4.0-pro"
+COHERE_RERANK_ENDPOINT_URI=""
+
+# Resolve deployed Cohere reranker deployment name from ARM outputs (fallback to default)
+DEPLOYED_RERANK_NAME=$(jq -r '.properties.outputs.deployedModels.value[]? | select((.name | ascii_downcase | startswith("cohere-rerank")) or (.deploymentName | ascii_downcase | startswith("cohere-rerank"))) | .deploymentName' output.json | head -n 1)
+if [ -n "$DEPLOYED_RERANK_NAME" ] && [ "$DEPLOYED_RERANK_NAME" != "null" ]; then
+  RERANK_MODEL_DEPLOYMENT_NAME="$DEPLOYED_RERANK_NAME"
+fi
+
+# Build Cohere rerank endpoint host used by postgres azure_ai.rank setup
+if [ -n "$RERANK_MODEL_DEPLOYMENT_NAME" ]; then
+  SANITIZED_RERANK_HOST=$(echo "$RERANK_MODEL_DEPLOYMENT_NAME" | tr '[:upper:]' '[:lower:]' | tr -d '.')
+  COHERE_RERANK_ENDPOINT_URI="https://${SANITIZED_RERANK_HOST}.${RG_LOCATION}.models.ai.azure.com"
+fi
 
 ENV_FILE_PATH="../src/python/workshop/.env"
 
@@ -62,16 +72,6 @@ ENV_FILE_PATH="../src/python/workshop/.env"
 
 # Create workshop directory if it doesn't exist
 mkdir -p "$(dirname "$ENV_FILE_PATH")"
-
-# If a Cohere rerank endpoint was deployed, attempt to retrieve its primary key
-if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
-  KEYS_RESPONSE=$(az rest \
-    --method post \
-    --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.MachineLearningServices/workspaces/${COHERE_WORKSPACE_PROJECT_NAME}/serverlessEndpoints/${COHERE_RERANK_ENDPOINT_NAME}/listKeys?api-version=2024-04-01-preview" 2>/dev/null || true)
-  if [ -n "$KEYS_RESPONSE" ]; then
-    COHERE_RERANK_ENDPOINT_KEY=$(echo "$KEYS_RESPONSE" | jq -r '.primaryKey // empty')
-  fi
-fi
 
 # Retrieve Azure OpenAI (Cognitive Services) account key (moved earlier so it's written to .env)
 if [ -n "$AI_FOUNDRY_NAME" ] && [ -n "$RESOURCE_GROUP_NAME" ]; then
@@ -89,15 +89,13 @@ fi
   echo "PROJECT_ENDPOINT=$PROJECTS_ENDPOINT"
   echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
+  echo "RERANK_MODEL_DEPLOYMENT_NAME=\"$RERANK_MODEL_DEPLOYMENT_NAME\""
+  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
+  fi
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
   echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
-  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
-    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
-    if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
-      echo "COHERE_RERANK_ENDPOINT_KEY=\"$COHERE_RERANK_ENDPOINT_KEY\""
-    fi
-  fi
   if [ -n "$AZURE_OPENAI_KEY" ]; then
     echo "AZURE_OPENAI_KEY=\"$AZURE_OPENAI_KEY\""
   fi
@@ -110,15 +108,13 @@ ROOT_ENV_FILE_PATH="../.env"
   echo "PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\""
   echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
+  echo "RERANK_MODEL_DEPLOYMENT_NAME=\"$RERANK_MODEL_DEPLOYMENT_NAME\""
+  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
+    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
+  fi
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
   echo "POSTGRES_SERVER_USERNAME=\"$POSTGRES_SERVER_USERNAME\""
-  if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
-    echo "COHERE_RERANK_ENDPOINT_URI=\"$COHERE_RERANK_ENDPOINT_URI\""
-    if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
-      echo "COHERE_RERANK_ENDPOINT_KEY=\"$COHERE_RERANK_ENDPOINT_KEY\""
-    fi
-  fi
   if [ -n "$AZURE_OPENAI_KEY" ]; then
     echo "AZURE_OPENAI_KEY=\"$AZURE_OPENAI_KEY\""
   fi
@@ -171,13 +167,9 @@ echo "  Foundry Resource: $AI_FOUNDRY_NAME"
 echo "  Application Insights: $APPLICATION_INSIGHTS_NAME"
 echo "  PostgreSQL Server: $POSTGRES_SERVER_FQDN"
 echo "  PostgreSQL Username: $POSTGRES_SERVER_USERNAME"
+echo "  Reranker Deployment: $RERANK_MODEL_DEPLOYMENT_NAME"
 if [ -n "$COHERE_RERANK_ENDPOINT_URI" ]; then
-  echo "  Cohere Rerank Endpoint: $COHERE_RERANK_ENDPOINT_URI"
-  if [ -n "$COHERE_RERANK_ENDPOINT_KEY" ]; then
-    echo "  Cohere Rerank Endpoint Key: (stored in .env)"
-  else
-    echo "  Cohere Rerank Endpoint Key: (not retrieved)"
-  fi
+  echo "  Cohere Rerank Endpoint URI: $COHERE_RERANK_ENDPOINT_URI"
 fi
 if [ -n "$AZURE_OPENAI_KEY" ]; then
   echo "  Azure OpenAI Key: (stored in .env)"

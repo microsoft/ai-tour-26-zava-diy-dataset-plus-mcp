@@ -32,15 +32,19 @@ param models array = [
     skuName: 'GlobalStandard'
     capacity: 120
   }
+  {
+    name: 'Cohere-rerank-v4.0-pro'
+    format: 'Cohere'
+    version: '1'
+    skuName: 'GlobalStandard'
+    capacity: 120
+  }
 ]
 
 @description('Unique suffix for the resources. Must be 4 characters long.')
 @maxLength(4)
 @minLength(4)
 param uniqueSuffix string
-
-@description('Whether to deploy the Cohere Rerank v3.5 serverless endpoint (preview)')
-param deployCohereRerank bool = false
 
 var resourceGroupName = toLower('rg-${resourcePrefix}-${uniqueSuffix}')
 
@@ -192,16 +196,6 @@ module hubBasedProject 'ai/ai-environment.bicep' = {
   }
 }
 
-module cohereRerank 'cohere-rerank-serverless.bicep' = if (deployCohereRerank) {
-  name: 'cohere-rerank'
-  scope: rg
-  params: {
-    projectName: hubBasedProject.outputs.projectName
-    location: location
-    tags: rootTags
-  }
-}
-
 module postgresServer 'postgres.bicep' = {
   name: 'postgresql'
   scope: rg
@@ -250,6 +244,3 @@ output applicationInsightsConnectionString string = applicationInsights.outputs.
 output applicationInsightsInstrumentationKey string = applicationInsights.outputs.instrumentationKey
 output postgresServerFqdn string = postgresServer.outputs.domain
 output postgresServerUsername string = postgresServer.outputs.username
-output cohereRerankEndpointUri string = deployCohereRerank ? cohereRerank!.outputs.endpointUri : ''
-output cohereRerankEndpointName string = deployCohereRerank ? cohereRerank!.outputs.endpointName : ''
-output cohereWorkspaceProjectName string = hubBasedProject.outputs.projectName
